@@ -46,9 +46,9 @@ long long benchmark(Setup setup, Run run, double time_max = TIME_MAX,
   return (long long)time_min.count();
 }
 
-// Forward declaration of the core C convolution function
+// Forward declaration of the core C dgemm function
 extern "C" {
-void conv_kernel(const double *A, double *B, int m, int n);
+void square_dgemm(int n, double *A, double *B, double *C);
 }
 
 // Main function - benchmark harness with inline argument parsing
@@ -127,38 +127,40 @@ int main(int argc, char **argv) {
 
   // Load the input matrix A - inline npy load
   std::vector<double> A;
+  std::vector<double> B;
   std::vector<unsigned long> input_shape;
   bool input_fortran_order;
   npy::LoadArrayFromNumpy<double>(input + "/A.npy", input_shape,
                                   input_fortran_order, A);
+  npy::LoadArrayFromNumpy<double>(input + "/B.npy", input_shape,
+                                  input_fortran_order, B);
 
   // Get dimensions from loaded shape
-  int m = static_cast<int>(input_shape[0]);
-  int n = static_cast<int>(input_shape[1]);
+  int n = static_cast<int>(input_shape[0]);
 
   if (verbose) {
-    std::cout << "Matrix dimensions: " << m << "x" << n << std::endl;
+    std::cout << "Matrix dimensions: " << n << "x" << n << std::endl;
   }
 
-  // Create output vector B
-  std::vector<double> B(m * n, 0.0);
+  // Create output vector C
+  std::vector<double> C(n * n, 0.0);
 
-  // Benchmark the convolution
+  // Benchmark the dgemm
   auto time = benchmark(
       []() {
         // Setup function - nothing to do here
       },
-      [&A, &B, &m, &n]() {
-        // Call the core C convolution function with array data
-        conv_kernel(A.data(), B.data(), m, n);
+      [&n, &A, &B, &C]() {
+        // Call the core C dgemm function with array data
+        square_dgemm(n, A.data(), B.data(), C.data());
       },
       time_max, max_trials);
 
   // Save results as 2D array - inline npy store
-  std::vector<unsigned long> output_shape = {static_cast<unsigned long>(m),
+  std::vector<unsigned long> output_shape = {static_cast<unsigned long>(n),
                                              static_cast<unsigned long>(n)};
-  npy::SaveArrayAsNumpy(output + "/B.npy", false, output_shape.size(),
-                        output_shape.data(), B);
+  npy::SaveArrayAsNumpy(output + "/C.npy", false, output_shape.size(),
+                        output_shape.data(), C);
 
   json measurements;
   measurements["time"] = time;
@@ -167,7 +169,7 @@ int main(int argc, char **argv) {
   measurements_file.close();
 
   if (verbose) {
-    std::cout << "Convolution completed. Time: " << time << " ns" << std::endl;
+    std::cout << "dgemm completed. Time: " << time << " ns" << std::endl;
   }
 
   return 0;

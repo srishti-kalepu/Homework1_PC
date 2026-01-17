@@ -1,5 +1,5 @@
-conv_baseline
-conv_optimized
+dgemm-naive
+dgemm-optimized
 input
 output
 *.o

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 
 
-def run_conv(kernel, A, n_trials=10):
+def run_dgemm(kernel, A, B, n_trials=10):
     # Clean up and create directories
     if os.path.exists("input"):
         shutil.rmtree("input")
@@ -18,6 +18,7 @@ def run_conv(kernel, A, n_trials=10):
 
     # Save input data
     np.save("input/A.npy", A)
+    np.save("input/B.npy", B)
 
     # Run the kernel with correct arguments
     cmd = [
@@ -39,62 +40,104 @@ def run_conv(kernel, A, n_trials=10):
         print("STDERR:", result.stderr)
         raise RuntimeError(f"Kernel {kernel} execution failed")
 
-    B = np.load("output/B.npy")
+    C = np.load("output/C.npy")
     with open("output/measurements.json", "r") as f:
         measurements = dict(json.load(f))
-    measurements["B"] = B
+    measurements["C"] = C
     return measurements
 
 
 if __name__ == "__main__":
-    m, n = 128, 128
-    input_data = np.random.rand(m, n).astype(np.float64)
+    max_speed_gflops = 56000
+    test_sizes = [
+        31,
+        32,
+        96,
+        97,
+        127,
+        128,
+        129,
+        191,
+        192,
+        229,
+        255,
+        256,
+        257,
+        319,
+        320,
+        321,
+        417,
+        479,
+        480,
+        511,
+        512,
+        639,
+        640,
+        767,
+        768,
+        769,
+    ]
 
-    n_trials = 100
+    naive_kernel_name = "dgemm-naive"
+    optimized_kernel_name = "dgemm-optimized"
 
-    baseline_times = []
-    optimized_times = []
+    for n in test_sizes:
+        input_data_A = np.random.rand(n, n).astype(np.float64)
+        input_data_B = np.random.rand(n, n).astype(np.float64)
 
-    for trial in range(n_trials):
-        if trial % 100 == 0:
-            print(f"Progress: {trial}/{n_trials}")
+        baseline_times = []
+        optimized_times = []
 
-        # Randomly decide order for this trial to avoid systemic bias
-        order = np.random.choice(["baseline_first", "optimized_first"])
+        n_trials = 100
+        for trial in range(n_trials):
+            # if trial % 100 == 0:
+            #     print(f"Progress: {trial}/{n_trials}")
 
-        if order == "baseline_first":
-            baseline_result = run_conv("conv_baseline", input_data, n_trials=1)
-            baseline_times.append(baseline_result["time"])
-            optimized_result = run_conv("conv_optimized", input_data, n_trials=1)
-            optimized_times.append(optimized_result["time"])
-            assert np.allclose(
-                baseline_result["B"], optimized_result["B"]
-            ), "Results do not match!"
-        else:
-            optimized_result = run_conv("conv_optimized", input_data, n_trials=1)
-            optimized_times.append(optimized_result["time"])
-            baseline_result = run_conv("conv_baseline", input_data, n_trials=1)
-            baseline_times.append(baseline_result["time"])
-            assert np.allclose(
-                baseline_result["B"], optimized_result["B"]
-            ), "Results do not match!"
+            # Randomly decide order for this trial to avoid systemic bias
+            order = np.random.choice(["baseline_first", "optimized_first"])
 
-    baseline_times = np.array(baseline_times)
-    optimized_times = np.array(optimized_times)
+            if order == "baseline_first":
+                baseline_result = run_dgemm(
+                    naive_kernel_name, input_data_A, input_data_B, n_trials=1
+                )
+                baseline_times.append(baseline_result["time"])
+                optimized_result = run_dgemm(
+                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1
+                )
+                optimized_times.append(optimized_result["time"])
+                assert np.allclose(
+                    baseline_result["C"], optimized_result["C"]
+                ), "Results do not match!"
+            else:
+                optimized_result = run_dgemm(
+                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1
+                )
+                optimized_times.append(optimized_result["time"])
+                baseline_result = run_dgemm(
+                    naive_kernel_name, input_data_A, input_data_B, n_trials=1
+                )
+                baseline_times.append(baseline_result["time"])
+                assert np.allclose(
+                    baseline_result["C"], optimized_result["C"]
+                ), "Results do not match!"
 
-    wins = np.sum(optimized_times < baseline_times)
-    win_rate = wins / n_trials
+        baseline_times = np.array(baseline_times)
+        optimized_times = np.array(optimized_times)
 
-    # Use binomial test (null hypothesis: win rate = 0.5)
-    p_value = scipy.stats.binomtest(wins, n_trials, 0.5).pvalue
+        wins = np.sum(optimized_times < baseline_times)
+        win_rate = wins / n_trials
 
-    print(f"baseline time: {np.min(baseline_times):.0f} ns")
-    print(f"optimized time: {np.min(optimized_times):.0f} ns")
-    print(f"speedup: {np.min(baseline_times) / np.min(optimized_times):.2f}x")
-    print(f"optimized wins: {wins}/{n_trials} ({win_rate:.1%})")
-    print(f"binomial test p-value: {p_value:.6f}")
+        # Use binomial test (null hypothesis: win rate = 0.5)
+        p_value = scipy.stats.binomtest(wins, n_trials, 0.5).pvalue
 
-    if p_value > 0.05:
-        print("No significant difference detected.")
-    else:
-        print("Significant difference detected!")
+        baseline_times_min = np.min(baseline_times)
+        baseline_mflops = 2.0e-6 * n * n * n / (baseline_times_min * 1.0e-9)
+        baseline_peak_perc = ((baseline_mflops / 1000) / max_speed_gflops) * 100
+
+        optimized_times_min = np.min(optimized_times)
+        optimized_mflops = 2.0e-6 * n * n * n / (optimized_times_min * 1.0e-9)
+        optimized_peak_perc = ((optimized_mflops / 1000) / max_speed_gflops) * 100
+
+        print(
+            f"Size: {n}       Mflops: {optimized_mflops:.2f} (peak perc: {optimized_peak_perc:.6f}%)      speedup: {baseline_times_min / optimized_times_min:.2f}x        binomial test p-value: {p_value:.6f} (win rate: {win_rate:.1%})"
+        )
