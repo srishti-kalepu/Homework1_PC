@@ -48,7 +48,10 @@ def run_dgemm(kernel, A, B, n_trials=10):
 
 
 if __name__ == "__main__":
-    max_speed_gflops = 56000
+    # The reference machine is Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz (turbo boost is disabled)
+    # Manual: https://www.intel.com/content/www/us/en/products/sku/193957/intel-xeon-gold-6226-processor-19-25m-cache-2-70-ghz/specifications.html
+    # 8 wide register x 2 FMA units
+    max_speed_gflops = 2.7 * 8 * 2
     test_sizes = [
         31,
         32,
@@ -82,6 +85,8 @@ if __name__ == "__main__":
     optimized_kernel_name = "dgemm-optimized"
 
     for n in test_sizes:
+        # Double precision float
+        # Ref: https://numpy.org/doc/stable/user/basics.types.html#relationship-between-numpy-data-types-and-c-data-types
         input_data_A = np.random.rand(n, n).astype(np.float64)
         input_data_B = np.random.rand(n, n).astype(np.float64)
 
