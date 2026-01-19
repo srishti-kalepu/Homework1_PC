@@ -50,8 +50,9 @@ def run_dgemm(kernel, A, B, n_trials=10):
 if __name__ == "__main__":
     # The reference machine is Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz (turbo boost is disabled)
     # Manual: https://www.intel.com/content/www/us/en/products/sku/193957/intel-xeon-gold-6226-processor-19-25m-cache-2-70-ghz/specifications.html
-    # 8 wide register x 2 FMA units
-    max_speed_gflops = 2.7 * 8 * 2
+    # VPUs: https://cvw.cac.cornell.edu/vector/hardware/vector-processing-unit#:~:text=Vector%20processing%20units%20(VPUs)%20perform%20the%20actual,are%20equipped%20with%20two%20VPUs%20per%20core.
+    # 8 (vectorization width) x 2 (vector processing units) x 2 (FMA units)
+    max_speed_gflops = 2.7 * 8 * 2 * 2
     test_sizes = [
         31,
         32,
