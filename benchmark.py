@@ -94,11 +94,8 @@ if __name__ == "__main__":
         baseline_times = []
         optimized_times = []
 
-        n_trials = 100
+        n_trials = 10
         for trial in range(n_trials):
-            # if trial % 100 == 0:
-            #     print(f"Progress: {trial}/{n_trials}")
-
             # Randomly decide order for this trial to avoid systemic bias
             order = np.random.choice(["baseline_first", "optimized_first"])
 
@@ -137,13 +134,13 @@ if __name__ == "__main__":
         p_value = scipy.stats.binomtest(wins, n_trials, 0.5).pvalue
 
         baseline_times_min = np.min(baseline_times)
-        baseline_mflops = 2.0e-6 * n * n * n / (baseline_times_min * 1.0e-9)
-        baseline_peak_perc = ((baseline_mflops / 1000) / max_speed_gflops) * 100
+        baseline_gflops = 2.0e-9 * n * n * n / (baseline_times_min * 1.0e-9)
+        baseline_peak_perc = (baseline_gflops / max_speed_gflops) * 100
 
         optimized_times_min = np.min(optimized_times)
-        optimized_mflops = 2.0e-6 * n * n * n / (optimized_times_min * 1.0e-9)
-        optimized_peak_perc = ((optimized_mflops / 1000) / max_speed_gflops) * 100
+        optimized_gflops = 2.0e-9 * n * n * n / (optimized_times_min * 1.0e-9)
+        optimized_peak_perc = (optimized_gflops / max_speed_gflops) * 100
 
         print(
-            f"Size: {n}       Mflops: {optimized_mflops:.2f} (peak perc: {optimized_peak_perc:.6f}%)      speedup: {baseline_times_min / optimized_times_min:.2f}x        binomial test p-value: {p_value:.6f} (win rate: {win_rate:.1%})"
+            f"Size: {n}    Gflops: {optimized_gflops:.2f}    peak perc: {optimized_peak_perc:.6f}%    speedup: {baseline_times_min / optimized_times_min:.2f}x"
         )

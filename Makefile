@@ -11,7 +11,7 @@ clean:
 	rm -rf *.o *.dSYM *.trace
 
 dgemm-naive.o: dgemm-naive.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) -c $< -o $@
 
 dgemm-optimized.o: dgemm-optimized.c
 	$(CC) $(CFLAGS) -c $< -o $@
