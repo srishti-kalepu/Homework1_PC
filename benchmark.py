@@ -304,8 +304,8 @@ if __name__ == "__main__":
 
     max_num_threads = 24
 
-    # benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kernel_name)
-    # benchmark_strong_scaling(optimized_kernel_name, max_num_threads)
+    benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kernel_name)
+    benchmark_strong_scaling(optimized_kernel_name, max_num_threads)
 
     first_matrix_size = 32
     benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_threads)
