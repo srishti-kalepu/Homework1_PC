@@ -8,14 +8,14 @@
 * [Problem statement](#problem-statement)
 * [Instructions](#instructions)
     * [Teams](#teams)
-    * [Getting Started with Perlmutter](#getting-started-with-perlmutter)
+    * [Getting Started with PACE](#getting-started-with-pace)
     * [Getting Set Up](#getting-set-up)
     * [Building our Code](#building-our-code)
     * [Running our Code](#running-our-code)
     * [Interactive Session](#interactive-session)
     * [Editing the Code](#editing-the-code)
     * [Our Harness](#our-harness)
-    * [Perlmutter's Processors](#perlmutters-processors)
+    * [Standard Processor On PACE](#Standard-Processor-On-PACE)
 * [Grading](#grading)
     * [Submission Details](#submission-details)
     * [Write-up Details](#write-up-details)
@@ -28,7 +28,7 @@
 
 ## Problem statement
 
-Your task in this assignment is to write an optimized [matrix multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication) function for NERSC's Perlmutter supercomputer. We will give you a generic matrix multiplication code (also called matmul or dgemm), and it will be your job to tune our code to run efficiently on Perlmutter's processors. We are asking you to write an optimized single-threaded matrix multiply kernel. This will run on only one core.
+Your task in this assignment is to write an optimized [matrix multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication) function for ICE's supercomputer. We will give you a generic matrix multiplication code (also called matmul or dgemm), and it will be your job to tune our code to run efficiently on ICE's processors. We are asking you to write an optimized single-threaded matrix multiply kernel. This will run on only one core.
 
 We consider a special case of matmul:
 
@@ -50,13 +50,9 @@ end
 
 # Instructions
 
-## Teams
-
-Note that you will work in assigned teams for this assignment. See bCourses for your group assignments.
-
 ## Getting Set Up
 
-The starter code is available on GitHub at [https://github.com/Parallelizing-Compilers/Homework1](https://github.com/Parallelizing-Compilers/Homework1) and should work out of the box. To get started, we recommend you log in to Perlmutter and download the first part of the assignment. This will look something like the following:
+The starter code is available on GitHub at [https://github.com/Parallelizing-Compilers/Homework1](https://github.com/Parallelizing-Compilers/Homework1) and should work out of the box. To get started, we recommend you log in to ICE and download the assignment. This will look something like the following:
 
 ## Getting Started with PACE
 
