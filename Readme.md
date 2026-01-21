@@ -69,12 +69,11 @@ benchmark.cpp  dgemm-naive.c      json.hpp  npy.hpp         Readme.md
 benchmark.py   dgemm-optimized.c  Makefile  pyproject.toml  requirements.txt
 ```
 
-There are seven files in the base repository. Their purposes are as follows:
 
-* **CMakeLists.txt**
+* **Makefile**
 
 
-The build system that manages compiling your code.
+The build script that manages compiling your code.
 * **Readme.md**
 
 
@@ -100,12 +99,10 @@ For illustrative purposes, a naive implementation of matrix multiply using three
 ## Installation
 - Use pip to install the dependencies, ensure that you have Python 3.12 or greater.
     ```bash
+    module load python/3.12.5
+    python -m venv hw1
+    source hw1/bin/activate
     pip install -r requirements.txt
-    ```
-
-- Feel free to use poetry instead of pip if you prefer.
-    ```bash
-    poetry install --no-root
     ```
 
 - Ensure you have a C compiler (e.g., `gcc`) installed to compile the benchmarking harness.
@@ -120,6 +117,9 @@ You may find it useful to launch an [interactive session](https://gatech.service
 student@local:~> ssh <gatech_username>@login-ice.pace.gatech.edu
 student@login-ice-1:~> salloc -N 1 -n 12 -t 04:00:00 -C gold6226
 student@login-ice-1:~> cd Homework1
+student@login-ice-1:~> module load python/3.12.5
+student@login-ice-1:~> python -m venv hw1
+student@login-ice-1:~> source hw1/bin/activate
 student@login-ice-1:~/Homework1> python benchmark.py
 ```
 
