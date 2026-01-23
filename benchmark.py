@@ -105,7 +105,7 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, optimized_kernel_name
         optimized_peak_perc = (optimized_gflops / max_speed_gflops) * 100
 
         print(
-            f"Size: {n}\tGflops: {optimized_gflops:.2f}\t%peak: {optimized_peak_perc:.6f}%\tspeedup: {baseline_result["time"] / optimized_result["time"]:.2f}x"
+            f"Size: {n:8d}   Gflops: {optimized_gflops:8.2f}   %peak: {optimized_peak_perc:8.4f}%   speedup: {baseline_result['time'] / optimized_result['time']:8.2f}x"
         )
         
         measured_kernel_gflops.append(optimized_gflops)
@@ -113,7 +113,7 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, optimized_kernel_name
     draw_and_save_plot(test_sizes, measured_kernel_gflops, "Matrix Size", "GFLOP/s", "GFLOP/s for MatMul on matrices of varying sizes", "single_thread.png")
 
 def benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads):
-    thread_counts = [i for i in range(1,max_num_threads)]
+    thread_counts = [i for i in range(1,max_num_threads + 1)]
     speedup = []
 
     input_data_A = np.random.rand(matrix_size, matrix_size).astype(np.float64)
@@ -131,7 +131,7 @@ def benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads
         check_correctness(input_data_A, input_data_B, result["C"])
         speedup.append(single_thread_result["time"]/result["time"])
         print(
-            f"Strong Scaling Threads: {thread_count}\tSize: {matrix_size}\tSpeedup: {single_thread_result["time"] / result["time"]:.2f}x"
+            f"Strong Scaling Threads: {thread_count:8d}   Size: {matrix_size:8d}   Speedup: {single_thread_result['time'] / result['time']:8.2f}x"
         )
 
     draw_and_save_plot(thread_counts, speedup, "Number of threads", "Speedup over single thread", f"Strong Scaling Plot for {matrix_size}x{matrix_size} MatMul", "strong_scaling.png")
@@ -142,7 +142,7 @@ def benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_thr
 
     first_time = None
 
-    for thread_count in range(1, max_num_threads):
+    for thread_count in range(1, max_num_threads + 1):
         test_size = np.ceil(first_matrix_size * np.sqrt(thread_count)).astype(int)
         input_data_A = np.random.rand(test_size, test_size).astype(np.float64)
         input_data_B = np.random.rand(test_size, test_size).astype(np.float64)
@@ -156,13 +156,13 @@ def benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_thr
             first_time = result["time"]
 
         print(
-            f"Weak Scaling Threads: {thread_count}\tSize: {test_size}\tSpeedup: {first_time / result["time"]:.2f}x"
+            f"Weak Scaling Threads: {thread_count:8d}   Size: {test_size:8d}   Speedup: {first_time / result['time']:8.2f}x"
         )
             
         speedup.append(first_time/result["time"])
 
     draw_and_save_plot(
-        [i for i in range(1, max_num_threads)],
+        [i for i in range(1, max_num_threads + 1)],
         speedup, 
         "Number of threads", 
         "Speedup over single thread", 
@@ -204,5 +204,5 @@ if __name__ == "__main__":
         benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads)
 
     if "--weak-scaling" in os.sys.argv:
-        first_matrix_size = 200
+        first_matrix_size = 222
         benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_threads)
