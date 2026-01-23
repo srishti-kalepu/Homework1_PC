@@ -19,7 +19,7 @@ def draw_and_save_plot(x, y, x_label, y_label, plot_title, file_name):
     plt.savefig(f"plot/{file_name}", dpi=300, bbox_inches='tight')
 
 
-def run_dgemm(kernel, A, B, n_trials=10, num_threads=1):
+def run_dgemm(kernel, A, B, num_threads=1, max_time=1, trials_max=10000):
     # Save input data
     np.save("input/A.npy", A)
     np.save("input/B.npy", B)
@@ -33,9 +33,9 @@ def run_dgemm(kernel, A, B, n_trials=10, num_threads=1):
         "--output",
         "output",
         "--trial-max",
-        str(n_trials),
+        str(trials_max),
         "--time-max",
-        "inf",
+        str(max_time),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -92,51 +92,21 @@ def benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kerne
         baseline_times = []
         optimized_times = []
 
-        n_trials = 10
-        for trial in range(n_trials):
-            # Randomly decide order for this trial to avoid systemic bias
-            order = np.random.choice(["baseline_first", "optimized_first"])
+        baseline_result = run_dgemm(
+            naive_kernel_name, input_data_A, input_data_B, num_threads=1
+        )
+        optimized_result = run_dgemm(
+            optimized_kernel_name, input_data_A, input_data_B, num_threads=1
+        )
+        assert np.allclose(
+            baseline_result["C"], optimized_result["C"]
+        ), "Results do not match!"
 
-            if order == "baseline_first":
-                baseline_result = run_dgemm(
-                    naive_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=1
-                )
-                baseline_times.append(baseline_result["time"])
-                optimized_result = run_dgemm(
-                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=1
-                )
-                optimized_times.append(optimized_result["time"])
-                assert np.allclose(
-                    baseline_result["C"], optimized_result["C"]
-                ), "Results do not match!"
-            else:
-                optimized_result = run_dgemm(
-                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=1
-                )
-                optimized_times.append(optimized_result["time"])
-                baseline_result = run_dgemm(
-                    naive_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=1
-                )
-                baseline_times.append(baseline_result["time"])
-                assert np.allclose(
-                    baseline_result["C"], optimized_result["C"]
-                ), "Results do not match!"
-
-        baseline_times = np.array(baseline_times)
-        optimized_times = np.array(optimized_times)
-
-        wins = np.sum(optimized_times < baseline_times)
-        win_rate = wins / n_trials
-        p_value = scipy.stats.binomtest(wins, n_trials, 0.5).pvalue
-
-        baseline_times_min = np.min(baseline_times)
-
-        optimized_times_min = np.min(optimized_times)
-        optimized_gflops = 2.0e-9 * n * n * n / (optimized_times_min * 1.0e-9)
+        optimized_gflops = 2.0e-9 * n * n * n / (optimized_result["time"] * 1.0e-9)
         optimized_peak_perc = (optimized_gflops / max_speed_gflops) * 100
 
         print(
-            f"Size: {n}    Gflops: {optimized_gflops:.2f}    peak perc: {optimized_peak_perc:.6f}%    speedup: {baseline_times_min / optimized_times_min:.2f}x"
+            f"Size: {n}    Gflops: {optimized_gflops:.2f}    %peak: {optimized_peak_perc:.6f}%    speedup: {baseline_result["time"] / optimized_result["time"]:.2f}x"
         )
         
         measured_kernel_gflops.append(optimized_gflops)
@@ -146,19 +116,18 @@ def benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kerne
 def benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads):
     thread_counts = [i for i in range(1,max_num_threads)]
     speedup = []
-    n_trials = 10
 
     input_data_A = np.random.rand(matrix_size, matrix_size).astype(np.float64)
     input_data_B = np.random.rand(matrix_size, matrix_size).astype(np.float64)
 
     # Single thread performance
     single_thread_result = run_dgemm(
-        optimized_kernel_name, input_data_A, input_data_B, n_trials=n_trials, num_threads=1
+        optimized_kernel_name, input_data_A, input_data_B, num_threads=1
     )
     
     for thread_count in thread_counts:
         multithread_result = run_dgemm(
-            optimized_kernel_name, input_data_A, input_data_B, n_trials=n_trials, num_threads=thread_count
+            optimized_kernel_name, input_data_A, input_data_B, num_threads=thread_count
         )
         assert np.allclose(
             single_thread_result["C"], multithread_result["C"]
@@ -169,51 +138,34 @@ def benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads
 
 
 def benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_threads):
-    thread_counts_test_size_tup = [(i, first_matrix_size*i) for i in range(1,max_num_threads)]
     speedup = []
     n_trials = 10
 
-    for thread_count, test_size in thread_counts_test_size_tup:
+    first_time = None
+
+    for thread_count in range(1, max_num_threads):
+        test_size = first_matrix_size * thread_count
         input_data_A = np.random.rand(test_size, test_size).astype(np.float64)
         input_data_B = np.random.rand(test_size, test_size).astype(np.float64)
 
-        single_thread_times = []
-        multithread_times = []
+        baseline_result = run_dgemm(
+            optimized_kernel_name, input_data_A, input_data_B, num_threads=1
+        )
+        optimized_result = run_dgemm(
+            optimized_kernel_name, input_data_A, input_data_B, num_threads=thread_count
+        )
+        assert np.allclose(
+            baseline_result["C"], optimized_result["C"]
+        ), "Results do not match!"
 
-        for _ in range(n_trials):
-            # Randomly decide order for this trial to avoid systemic bias
-            order = np.random.choice(["singlethread_first", "multithread_first"])
-
-            if order == "singlethread_first":
-                single_thread_result = run_dgemm(
-                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=1
-                )
-                single_thread_times.append(single_thread_result["time"])
-                multithread_result = run_dgemm(
-                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=thread_count
-                )
-                multithread_times.append(multithread_result["time"])
-                assert np.allclose(
-                    single_thread_result["C"], multithread_result["C"]
-                ), "Results do not match!"
-            else:
-                multithread_result = run_dgemm(
-                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=thread_count
-                )
-                multithread_times.append(multithread_result["time"])
-                single_thread_result = run_dgemm(
-                    optimized_kernel_name, input_data_A, input_data_B, n_trials=1, num_threads=1
-                )
-                single_thread_times.append(single_thread_result["time"])
-                assert np.allclose(
-                    single_thread_result["C"], multithread_result["C"]
-                ), "Results do not match!"
+        if first_time is None:
+            first_time = baseline_result["time"]
 
             
-        speedup.append(min(single_thread_times)/min(multithread_times))
+        speedup.append(first_time/optimized_result["time"])
 
     draw_and_save_plot(
-        [tup[0] for tup in thread_counts_test_size_tup], 
+        [i for i in range(1, max_num_threads)],
         speedup, 
         "Number of threads", 
         "Speedup over single thread", 
@@ -247,10 +199,20 @@ if __name__ == "__main__":
 
     max_num_threads = 12
 
-    benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kernel_name)
-    
-    matrix_size = 768
-    benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads)
+    if "--help" in os.sys.argv:
+        print("Usage: python benchmark.py [--benchmark] [--strong-scaling] [--weak-scaling]")
+        print("  --benchmark       : Run single-threaded benchmark over varying matrix sizes")
+        print("  --strong-scaling  : Run strong scaling benchmark on a fixed matrix size")
+        print("  --weak-scaling    : Run weak scaling benchmark starting from a small matrix size")
+        os.sys.exit(0)
 
-    first_matrix_size = 64
-    benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_threads)
+    if "--benchmark" in os.sys.argv or len(os.sys.argv) == 1:
+        benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kernel_name)
+    
+    if "--strong-scaling" in os.sys.argv:
+        matrix_size = 768
+        benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads)
+
+    if "--weak-scaling" in os.sys.argv:
+        first_matrix_size = 64
+        benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_threads)
