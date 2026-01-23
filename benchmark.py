@@ -106,6 +106,9 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, kernel_list, num_thre
             naive_kernel_name, input_data_A, input_data_B, num_threads=1
         )
 
+        baseline_gflops = 2.0e-9 * n * n * n / (baseline_result["time"] * 1.0e-9)
+        all_kernel_gflops.setdefault(naive_kernel_name, []).append(baseline_gflops)
+
         for kernel_name in kernel_list:
             optimized_result = run_dgemm(
                 kernel_name, input_data_A, input_data_B, num_threads=num_threads
@@ -119,7 +122,7 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, kernel_list, num_thre
                 f"{kernel_name:18s}: Size: {n:4d} GFLOPS: {optimized_gflops:5.0f} %peak: {optimized_peak_perc:4.0f}% speedup: {baseline_result['time'] / optimized_result['time']:5.1f}x"
             )
             
-            all_kernel_gflops.get(kernel_name, []).append(optimized_gflops)
+            all_kernel_gflops.setdefault(kernel_name, []).append(optimized_gflops)
 
     draw_and_save_plot(test_sizes, all_kernel_gflops, "Matrix Size", "GFLOP/s", "GFLOP/s for MatMul on matrices of varying sizes", "benchmark_comparison.png")
 
