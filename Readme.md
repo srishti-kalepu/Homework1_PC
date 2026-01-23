@@ -52,12 +52,11 @@ end
 
 ## Getting Set Up
 
-The starter code is available on GitHub at [https://github.com/Parallelizing-Compilers/Homework1](https://github.com/Parallelizing-Compilers/Homework1) and should work out of the box. To get started, we recommend you log in to ICE and download the assignment. This will look something like the following:
+The starter code is available on GitHub at [https://github.com/Parallelizing-Compilers/Homework1](https://github.com/Parallelizing-Compilers/Homework1) and should work out of the box. To get started, we recommend you log in to PACE-ICE and download the assignment.
 
 ## Getting Started with PACE
 
 Please read through the PACE tutorial, available here: [https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042102](https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042102)
-
 
 ```
 student@local:~> ssh <gatech_username>@login-ice.pace.gatech.edu
