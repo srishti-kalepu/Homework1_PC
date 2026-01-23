@@ -217,7 +217,7 @@ You can use multiple cores in this assignment and for that the calculation will 
 Now, it's time to optimize!  A few optimizations you might consider adding:
 1. Perform blocking. Break the matrix into smaller sub-matrices that fit into L1/L2 cache. The dgemm-optimized.c already gets you started with this, although you'll need to tune block sizes.
 2. Write a register-blocked kernel, either by writing an inner-level fixed-size matrix multiply and hoping (and [maybe checking](https://godbolt.org/)) that the compiler inlines it, writing [AVX intrinsics](https://software.intel.com/sites/landingpage/IntrinsicsGuide/), or even writing inline assembly instructions.
-3. Multithreading: Use OpenMP to utilize all cores on the node.
+3. Multithreading: Use OpenMP to utilize all cores on the node. Note that the kernel you submit **should not** hardcode the number of threads. The benchmark harness measures single-threaded and multithreaded performance by setting the number of threads via the OMP_NUM_THREADS environment variable.
 
 You may, of course, proceed however you wish.  We recommend you look through the lecture notes as reference material to guide your optimization process, as well as the references at the bottom of this write-up.
 
