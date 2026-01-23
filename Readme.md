@@ -108,7 +108,7 @@ For illustrative purposes, a naive implementation of matrix multiply using three
 
 Command to request an [interactive session](https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042096#interactive-jobs): [We will be making use of Intel Xeon Gold 6226 processor]
 ```
-student@login-ice-1:~> salloc -N 1 -n <no. of cores> -t <session-time> -C gold6226
+student@login-ice-1:~> salloc -N 1 -ntasks-per-node 12 -t <session-time> -C gold6226
 student@atl1-1-02-003-19-2:~> 
 ```
 
