@@ -9,7 +9,6 @@
 * [Instructions](#instructions)
     * [Teams](#teams)
     * [Getting Started with PACE](#getting-started-with-pace)
-    * [Getting Set Up](#getting-set-up)
     * [Building our Code](#building-our-code)
     * [Running our Code](#running-our-code)
     * [Interactive Session](#interactive-session)
@@ -28,7 +27,7 @@
 
 ## Problem statement
 
-Your task in this assignment is to write an optimized [matrix multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication) function for ICE's supercomputer. We will give you a generic matrix multiplication code (also called matmul or dgemm), and it will be your job to tune our code to run efficiently on ICE's processors. We are asking you to write an optimized single-threaded matrix multiply kernel. This will run on only one core.
+Your task in this assignment is to write an optimized [matrix multiplication](https://en.wikipedia.org/wiki/Matrix_multiplication) function for the PACE ICE Cluster. We will give you a generic matrix multiplication code (also called matmul or dgemm), and it will be your job to tune our code to run efficiently on the Intel Xeon Gold 6226 processors. We are asking you to write an optimized matrix multiply kernel which can be multi-threaded and run on multiple cores.
 
 We consider a special case of matmul:
 
@@ -54,73 +53,101 @@ end
 
 The starter code is available on GitHub at [https://github.com/Parallelizing-Compilers/Homework1](https://github.com/Parallelizing-Compilers/Homework1) and should work out of the box. To get started, we recommend you log in to PACE-ICE and download the assignment.
 
+## Important Note :
+Tasks requiring heavy compute on the login node will be automatically killed and may result in account suspension. You must use salloc to allocate a compute node before running this assignment.
+
 ## Getting Started with PACE
+
+If you are new to the PACE cluster, please ensure you are connected to the GT VPN. You will be logging into the ICE cluster environment.
 
 Please read through the PACE tutorial, available here: [https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042102](https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042102)
 
+To get started, log in to the PACE login node and clone the assignment.
 ```
 student@local:~> ssh <gatech_username>@login-ice.pace.gatech.edu
+student@login-ice-1:~> cd scratch
 student@login-ice-1:~> git clone [https://github.com/Parallelizing-Compilers/Homework1.git](https://github.com/Parallelizing-Compilers/Homework1.git)
-student@login-ice-1:~> salloc -N 1 -n 12 -t 04:00:00 -C gold6226
 student@login-ice-1:~> cd Homework1
 student@login-ice-1:~> ls
 benchmark.cpp  dgemm-naive.c      json.hpp  npy.hpp         Readme.md
 benchmark.py   dgemm-optimized.c  Makefile  pyproject.toml  requirements.txt
 ```
 
+There are ten files in the base repository. Their purposes are as follows:
 
 * **Makefile**
 
-
 The build script that manages compiling your code.
+
+* **benchmark.cpp**
+
+This file benchmarks the matrix multiplication and saves the result and timings.
+
 * **Readme.md**
 
-
 This Readme
+
+* **npy.hpp**, **json.hpp**
+
+Helpers
+
 * **benchmark.py**
 
-A driver program that runs your code.
-* **benchmark.cpp**, **npy.hpp**, **json.hpp**
-
-Helpers for benchmark.py
+This executes your pre-compiled binaries to measure performance, verify correctness, and generate scaling plots.
 
 * **dgemm-optimized.c**  - - -  **You may only modify this file.** 
 
 A simple blocked implementation of matrix multiply. It is your job to optimize the `square_dgemm()` function in this file.
+
 * **dgemm-naive.c** 
 
 For illustrative purposes, a naive implementation of matrix multiply using three nested loops.
 
-
 > Please **do not** modify any of the files besides _dgemm-optimized.c_
 
 
-## Installation
-- Use pip to install the dependencies, ensure that you have Python 3.12 or greater.
-    ```bash
-    module load python/3.12.5
-    python -m venv hw1
-    source hw1/bin/activate
-    pip install -r requirements.txt
-    ```
+## Moving to a Compute Node
 
-- Ensure you have a C compiler (e.g., `gcc`) installed to compile the benchmarking harness.
-
-- Build the C benchmarking harness by running `make` in the terminal.
-
-## Interactive Session
-
-You may find it useful to launch an [interactive session](https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042096#interactive-jobs) when developing your code. This lets you compile and run code interactively on a compute node that you've reserved. In addition, running interactively lets you use the special interactive queue, which means you'll receive your allocation quicker. For example: 
-
+Command to request an [interactive session](https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042096#interactive-jobs): [We will be making use of Intel Xeon Gold 6226 processor]
 ```
-student@local:~> ssh <gatech_username>@login-ice.pace.gatech.edu
-student@login-ice-1:~> salloc -N 1 -n 12 -t 04:00:00 -C gold6226
-student@login-ice-1:~> cd Homework1
-student@login-ice-1:~> module load python/3.12.5
-student@login-ice-1:~> python -m venv hw1
-student@login-ice-1:~> source hw1/bin/activate
-student@login-ice-1:~/Homework1> python benchmark.py
+salloc -N 1 -n 1 -c <no. of cores> -t <session-time> -C gold6226
 ```
+
+Once the command is granted, your terminal prompt will change (e.g., to [student@atl1-1-02-003-19-2]$). You are now on a compute node.
+
+## Building the Code
+
+Once you are on a compute node (inside salloc):
+
+We use a Makefile to simplify compilation.
+
+1. Load modules
+```
+student@atl1-1-02-003-19-2:~> module load gcc
+student@atl1-1-02-003-19-2:~> module load anaconda3
+```
+
+2. Clean previous builds if any and then compile
+```
+student@atl1-1-02-003-19-2:~> make clean
+student@atl1-1-02-003-19-2:~> make
+```
+This will generate two executables: dgemm-naive and dgemm-optimized.
+
+3. Load Python Environment
+```
+student@atl1-1-02-003-19-2:~> python -m venv hw1
+student@atl1-1-02-003-19-2:~> source hw1/bin/activate
+```
+
+## Running the Code
+Once you are on a compute node (inside salloc):
+
+2. Run the Python Driver
+```
+student@atl1-1-02-003-19-2:~> python3 benchmark.py
+```
+Running this script will verify your implementation's correctness, reporting per-size performance metrics (GFLOPS & Speedup) to the terminal, and saves the final scaling graph to the plot/ directory.
 
 ## Editing the Code
 
@@ -129,8 +156,8 @@ One of the easiest ways to implement your homework is to directly change the cod
 For beginners we recommend taking your first steps with `nano`. You can use it on PACE like this:
 
 ```
-student@login-ice-1:~/HW1> module load nano
-student@login-ice-1:~/HW1> nano dgemm-optimized.c
+student@atl1-1-02-003-19-2:~> module load nano
+student@atl1-1-02-003-19-2:~> nano dgemm-optimized.c
 ```
 Use `Ctrl+X` to exit.
 
@@ -141,6 +168,10 @@ student@login-ice-1:~/HW1> vim dgemm-optimized.c
 Use `Esc` and `:q` to exit. (`:q!` if you want to discard changes). Try out the [interactive vim tutorial](https://www.openvim.com/) to learn more.
 
 Using hosted version control like GitHub makes uploading your changes much easier. If you're in a Windows environment, consider using the Windows Subsystem for Linux (WSL) for development.
+
+## Our Harness
+
+The `benchmark.py` file generates matrices of a number of different sizes and benchmarks the performance. It outputs the performance in [FLOPS](https://en.wikipedia.org/wiki/FLOPS) and in a percentage of theoretical peak attained. Your job is to get your matrix-multiply's performance as close to the theoretical peak as possible.
 
 ## Standard Processor On PACE
 
@@ -155,38 +186,68 @@ You can learn more about the cpu by running the following command on PACE:
 student@login-ice-1:~> lscpu
 ```
 
-## Our Harness
-
-The `benchmark.py` file generates matrices of a number of different sizes and benchmarks the performance. It outputs the performance in [FLOPS](https://en.wikipedia.org/wiki/FLOPS) and in a percentage of theoretical peak attained. Your job is to get your matrix-multiply's performance as close to the theoretical peak as possible.
 
 ### Theoretical Peak
 
 Our benchmark harness reports numbers as a percentage of theoretical peak. Here, we show you how we calculate the theoretical peak. If you'd like to run the assignment on your own processor, you should follow this process to arrive at the theoretical peak of your own machine, and then replace the **max_speed** constant in `benchmark.py` with the theoretical peak of your machine. Be sure to change it back if you run your code on PACE again.
 
-### One Core
+### Single Core Peak
 
 One core has a normal clock rate of 2.7 GHz, so it can issue 2.7 billion instructions per second at maximum. Our processors also have a 512-bit _vector width_, meaning each instruction can operate on 8 64-bit data elements at a time. Furthermore, the processor includes a _fused multiply-add_ (FMA) instruction, which means 2 floating point operations can be performed in a single instruction.
 
 So, the theoretical peak is:
 - 2.7 GHz * 8-element (512-bit) vector * 2 vector pipelines * 2 ops in an FMA = 86.4 GFlops/s
 
+### Multi Core Peak 
+
+You can use multiple cores in this assignment and for that the calculation will be as below :
+- If you use 4 cores: $86.4 \times 4 = \mathbf{345.6 \text{ GFLOPS}}$
+
 ### Optimizing
 
 Now, it's time to optimize!  A few optimizations you might consider adding:
-1. Perform blocking. The dgemm-optimized.c already gets you started with this, although you'll need to tune block sizes.
+1. Perform blocking. Break the matrix into smaller sub-matrices that fit into L1/L2 cache. The dgemm-optimized.c already gets you started with this, although you'll need to tune block sizes.
 2. Write a register-blocked kernel, either by writing an inner-level fixed-size matrix multiply and hoping (and [maybe checking](https://godbolt.org/)) that the compiler inlines it, writing [AVX intrinsics](https://software.intel.com/sites/landingpage/IntrinsicsGuide/), or even writing inline assembly instructions.
-3. Add manual prefetching.
+3. Multithreading: Use OpenMP to utilize all cores on the node.
 
 You may, of course, proceed however you wish.  We recommend you look through the lecture notes as reference material to guide your optimization process, as well as the references at the bottom of this write-up.
+
+# Grading
+
+We will grade your assignment by reviewing your write-up, analyzing the optimizations you attempted in _dgemm-optimized.c_, and benchmarking your code's performance on the PACE cluster. Note that code that returns incorrect results will receive significant penalties.
+
+## Submission Details
+
+1.  Ensure that your write-up is located in your source directory, next to **dgemm-optimized.c**. It should be named **cs6245_<gt_username>_hw1.pdf**.
+2.  Clean your build directory 
+    ```
+    make clean
+    ```
+    This second command will fail if the PDF is not present.
+3.  Create a compressed archive of your work:
+    ```
+    tar -czvf cs6245_<gt_username>_hw1_submission.tar.gz dgemm-optimized.c cs6245_<gt_username>_hw1.pdf Makefile
+    ```
+4.  Submit the .tar.gz file through Canvas
+
+## Write-up Details
+
+* Your write-up should contain:
+    * The optimizations used or attempted,
+    * the results of those optimizations(Speedup graphs)
+    * the reason for any odd behavior (e.g., dips) in performance
+
+* Your write-up should be a maximum of 3-4 pages in length, including all text, figures, tables, and references.
 
 # Notes
 
 * **Your grade will mostly depend on three factors:**
-    * whether or not it is correct (ie. finishes running without exiting early)
-    * performance sustained by your codes on the ICE supercomputer,
-    * explanations of the performance features you observed (including what didn't work)
+    * Whether or not it is correct (ie. finishes running without exiting early)
+    * Performance sustained on the Intel Xeon Gold 6226.
+    * Explanations of the performance features you observed (including what didn't work)
+    
 * There are other formulations of matmul (e.g., [Strassen](http://en.wikipedia.org/wiki/Strassen_algorithm)) that are mathematically equivalent, but perform asymptotically fewer computations - we will not grade submissions that do fewer computations than the 2n^3 algorithm. This is actually an optional part of HW1.
-* You must use the GNU C Compiler 12.3 for this assignment. If your code does not compile and run with GCC 12.3, it will not be graded.
+* You must use the GNU C Compiler for this assignment. If your code does not compile and run with GCC, it will not be graded.
 * Besides compiler intrinsic functions and built-ins, your code (`dgemm-optimized.c`) must only call into the C standard library.
 * GNU C provides [many](http://gcc.gnu.org/onlinedocs/gcc/C-Extensions.html) extensions, which include intrinsics for vector (SIMD) instructions and data alignment. (Other compilers may have different interfaces.)
     * To manually vectorize, you should prefer to add compiler intrinsics to your code; avoid using inline assembly, at least at first.
@@ -213,7 +274,7 @@ These parts are not graded. You should be satisfied with your square_dgemm resul
 # Documentation
 
 * [ICE's programming environment](https://gatech.service-now.com/home?id=kb_article_view&sysparm_article=KB0042102) documentation
-* [GCC](https://gcc.gnu.org/onlinedocs/gcc-11.2.0/gcc/) documentation - Perlmutter's default version currently is GCC 12.3.0.
+* [GCC](https://gcc.gnu.org/onlinedocs/gcc-11.2.0/gcc/) documentation
 * [Intel's intrinsics guide](https://software.intel.com/sites/landingpage/IntrinsicsGuide/#techs=AVX2,FMA) - a complete overview of all available vector intrinsics.
 * [GCC's vector extensions](https://gcc.gnu.org/onlinedocs/gcc-11.2.0/gcc/Vector-Extensions.html#Vector-Extensions) - special types that make programming with vectors easier
 * [GCC's built-ins](https://gcc.gnu.org/onlinedocs/gcc-11.2.0/gcc/Other-Builtins.html#Other-Builtins) - special commands that give optimization hints to the compiler. See assume_aligned, unreachable, and expect. [Some are specific to x86.](https://gcc.gnu.org/onlinedocs/gcc-11.2.0/gcc/x86-Built-in-Functions.html#x86-Built-in-Functions)
@@ -232,6 +293,6 @@ Please only use one node at a time to conserve resources for other users.
 * Chellappa, S., Franchetti, F., and Puschel, M. 2008. [How To Write Fast Numerical Code: A Small Introduction](https://users.ece.cmu.edu/~franzf/papers/gttse07.pdf), Lecture Notes in Computer Science 5235, 196-259.
     * (Note: how to write C code for modern compilers and memory hierarchies, so that it runs fast. Recommended reading, especially for newcomers to code optimization.)
 * Bilmes, et al. [The PHiPAC (Portable High Performance ANSI C) Page for BLAS3 Compatible Fast Matrix Matrix Multiply](https://people.eecs.berkeley.edu/~krste/papers/phipac_ics97.pdf).
-    * (Note: PHiPAC is a code-generating autotuner for matmul that started as a submission for this HW in a previous semester of CS267. Also see [ATLAS](http://math-atlas.sourceforge.net/); both are good examples if you are considering code generation strategies.)
+    * Also see [ATLAS](http://math-atlas.sourceforge.net/)
 * Lam, M. S., Rothberg, E. E, and Wolf, M. E. 1991. The Cache Performance and Optimization of Blocked Algorithms, ASPLOS'91, 63-74.
     * (Note: clearly explains cache blocking, supported by with performance models.)
