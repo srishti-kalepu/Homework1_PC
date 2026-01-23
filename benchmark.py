@@ -17,17 +17,23 @@ def draw_and_save_plot(x, y_series_dict, x_label, y_label, plot_title, file_name
         marker = markers[i % len(markers)]
         plt.plot(x, y_data, marker=marker, color=color, label=series_name, linewidth=2, markersize=6)
 
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-    plt.title(plot_title)
-    plt.legend()
-    
     # Apply logarithmic scales if requested
     if log_x:
         plt.xscale('log')
     if log_y:
         plt.yscale('log')
+    
+    # Enhanced grid for log scales
+    if log_x or log_y:
+        plt.grid(True, which='major', linestyle='-', alpha=0.3)
+        plt.grid(True, which='minor', linestyle=':', alpha=0.2)
+    else:
+        plt.grid(True, linestyle='--', alpha=0.6)
+    
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(plot_title)
+    plt.legend()
     
     plt.tight_layout()
     plt.savefig(f"plot/{file_name}", dpi=300, bbox_inches='tight')
