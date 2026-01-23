@@ -149,6 +149,15 @@ student@atl1-1-02-003-19-2:~> python3 benchmark.py
 ```
 Running this script will verify your implementation's correctness, reporting per-size performance metrics (GFLOPS & Speedup) to the terminal, and saves the final scaling graph to the plot/ directory.
 
+Usage:
+```
+Usage: python benchmark.py [--help] [--benchmark] [--strong-scaling] [--weak-scaling]
+    --help            : Show this help message and exit
+    --benchmark       : Run single-threaded benchmark over varying matrix sizes
+    --strong-scaling  : Run strong scaling benchmark on a fixed matrix size
+    --weak-scaling    : Run weak scaling benchmark starting from a small matrix size
+
+
 ## Editing the Code
 
 One of the easiest ways to implement your homework is to directly change the code on the server. For this you need to use a command line editor like `nano` or `vim`.
@@ -234,10 +243,10 @@ We will grade your assignment by reviewing your write-up, analyzing the optimiza
 
 * Your write-up should contain:
     * The optimizations used or attempted,
-    * the results of those optimizations(Speedup graphs)
+    * the results of those optimizations (a plot with different lines for different versions),
     * the reason for any odd behavior (e.g., dips) in performance
 
-* Your write-up should be a maximum of 3-4 pages in length, including all text, figures, tables, and references.
+* Your write-up should be a maximum of 3 pages in length, including all text, figures, tables, and references.
 
 # Notes
 

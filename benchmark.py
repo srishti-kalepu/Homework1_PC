@@ -200,7 +200,8 @@ if __name__ == "__main__":
     max_num_threads = 12
 
     if "--help" in os.sys.argv:
-        print("Usage: python benchmark.py [--benchmark] [--strong-scaling] [--weak-scaling]")
+        print("Usage: python benchmark.py [--help] [--benchmark] [--strong-scaling] [--weak-scaling]")
+        print("  --help            : Show this help message and exit")
         print("  --benchmark       : Run single-threaded benchmark over varying matrix sizes")
         print("  --strong-scaling  : Run strong scaling benchmark on a fixed matrix size")
         print("  --weak-scaling    : Run weak scaling benchmark starting from a small matrix size")
