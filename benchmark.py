@@ -94,6 +94,8 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, kernel_list, num_thre
         769,
     ]
     
+    print("\n=== Benchmarking across sizes ===")
+
     all_kernel_gflops = {}
     
     for n in test_sizes:
