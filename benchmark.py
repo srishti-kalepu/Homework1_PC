@@ -107,9 +107,6 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, kernel_list, num_thre
         )
 
         for kernel_name in kernel_list:
-            print(f"\n=== Benchmarking kernel: {kernel_name} ===")
-            measured_kernel_gflops = []
-
             optimized_result = run_dgemm(
                 kernel_name, input_data_A, input_data_B, num_threads=num_threads
             )
@@ -119,11 +116,10 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, kernel_list, num_thre
             optimized_peak_perc = (optimized_gflops / max_speed_gflops) * 100
 
             print(
-                f"Kernel: {kernel_name}   Size: {n:8d}   Gflops: {optimized_gflops:8.2f}   %peak: {optimized_peak_perc:8.4f}%   speedup: {baseline_result['time'] / optimized_result['time']:8.2f}x"
+                f"{kernel_name:18s}: Size: {n:4d} GFLOPS: {optimized_gflops:5.0f} %peak: {optimized_peak_perc:4.0f}% speedup: {baseline_result['time'] / optimized_result['time']:5.1f}x"
             )
             
-            measured_kernel_gflops.append(optimized_gflops)
-            all_kernel_gflops[kernel_name] = measured_kernel_gflops
+            all_kernel_gflops.get(kernel_name, []).append(optimized_gflops)
 
     draw_and_save_plot(test_sizes, all_kernel_gflops, "Matrix Size", "GFLOP/s", "GFLOP/s for MatMul on matrices of varying sizes", "benchmark_comparison.png")
 
@@ -151,7 +147,7 @@ def benchmark_strong_scaling(kernel_list, matrix_size, max_num_threads):
             check_correctness(input_data_A, input_data_B, result["C"])
             speedup.append(single_thread_result["time"]/result["time"])
             print(
-                f"Kernel: {kernel_name}   Strong Scaling Threads: {thread_count:8d}   Size: {matrix_size:8d}   Speedup: {single_thread_result['time'] / result['time']:8.2f}x"
+                f"{kernel_name:18s}: Threads: {thread_count:4d} Size: {matrix_size:4d} speedup: {single_thread_result['time'] / result['time']:5.1f}x"
             )
 
         all_kernel_speedups[kernel_name] = speedup
@@ -181,7 +177,7 @@ def benchmark_weak_scaling(kernel_list, first_matrix_size, max_num_threads):
                 first_time = result["time"]
 
             print(
-                f"Kernel: {kernel_name}  Weak Scaling Threads: {thread_count:8d}   Size: {test_size:8d}   Speedup: {first_time / result['time']:8.2f}x"
+                f"{kernel_name:18s}: Threads: {thread_count:4d} Size: {test_size:4d} speedup: {first_time / result['time']:5.1f}x"
             )
                 
             speedup.append(first_time/result["time"])
