@@ -134,7 +134,7 @@ def benchmark_by_size(max_speed_gflops, naive_kernel_name, kernel_list, num_thre
             optimized_peak_perc = (optimized_gflops / max_speed_gflops) * 100
 
             print(
-                f"{kernel_name:18s}: Size: {n:4d} GFLOPS: {optimized_gflops:5.2f} %peak: {optimized_peak_perc:4.2f}% speedup: {baseline_result['time'] / optimized_result['time']:5.2f}x"
+                f"{kernel_name:>18s}: Size: {n:4d} GFLOPS: {optimized_gflops:5.2f} %peak: {optimized_peak_perc:4.2f}% speedup: {baseline_result['time'] / optimized_result['time']:5.2f}x"
             )
             
             all_kernel_gflops.setdefault(kernel_name, []).append(optimized_gflops)
@@ -171,7 +171,7 @@ def benchmark_strong_scaling(kernel_list, matrix_size, max_num_threads):
             check_correctness(input_data_A, input_data_B, result["C"])
             speedup.append(single_thread_result["time"]/result["time"])
             print(
-                f"{kernel_name:18s}: Threads: {thread_count:4d} Size: {matrix_size:4d} speedup: {single_thread_result['time'] / result['time']:5.2f}x"
+                f"{kernel_name:>18s}: Threads: {thread_count:4d} Size: {matrix_size:4d} speedup: {single_thread_result['time'] / result['time']:5.2f}x"
             )
 
         all_kernel_speedups[kernel_name] = speedup
@@ -201,7 +201,7 @@ def benchmark_weak_scaling(kernel_list, first_matrix_size, max_num_threads):
                 first_time = result["time"]
 
             print(
-                f"{kernel_name:18s}: Threads: {thread_count:4d} Size: {test_size:4d} speedup: {first_time / result['time']:5.2f}x"
+                f"{kernel_name:>18s}: Threads: {thread_count:4d} Size: {test_size:4d} speedup: {first_time / result['time']:5.2f}x"
             )
                 
             speedup.append(first_time/result["time"])
@@ -228,8 +228,8 @@ if __name__ == "__main__":
     # The reference machine is Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz (turbo boost is disabled)
     # Manual: https://www.intel.com/content/www/us/en/products/sku/193957/intel-xeon-gold-6226-processor-19-25m-cache-2-70-ghz/specifications.html
     # VPUs: https://cvw.cac.cornell.edu/vector/hardware/vector-processing-unit#:~:text=Vector%20processing%20units%20(VPUs)%20perform%20the%20actual,are%20equipped%20with%20two%20VPUs%20per%20core.
-    # 8 (vectorization width) x 2 (vector processing units) x 2 (FMA units)
-    max_speed_gflops = 2.7 * 8 * 2 * 2
+    # 8 (vectorization width) x 2 (vector processing units) x 2 (FMA units) x 12 (cores)
+    max_speed_gflops = 2.7 * 8 * 2 * 2 * 12
 
     naive_kernel_name = "dgemm-naive"
     optimized_kernel_name = "dgemm-optimized"
