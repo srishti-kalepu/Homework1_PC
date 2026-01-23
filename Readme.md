@@ -230,10 +230,6 @@ Now, it's time to optimize!  A few optimizations you might consider adding:
 
 You may, of course, proceed however you wish.  We recommend you look through the lecture notes as reference material to guide your optimization process, as well as the references at the bottom of this write-up.
 
-# Grading
-
-We will grade your assignment by reviewing your write-up, analyzing the optimizations you attempted in _dgemm-optimized.c_, and benchmarking your code's performance on the PACE cluster. Note that code that returns incorrect results will receive significant penalties.
-
 ## Submission Details
 
 1. Ensure that the final performance is measured on the compute node with 12 cores allocated. This is necessary because the value we have set for peak assumes that 12 cores are being used.
@@ -262,13 +258,22 @@ We will grade your assignment by reviewing your write-up, analyzing the optimiza
 
 * Your write-up should be a maximum of 3 pages in length, including all text, figures, tables, and references.
 
+# Grading
+
+We will grade your assignment by reviewing your write-up, analyzing the optimizations you attempted in _dgemm-optimized.c_, and benchmarking your code's performance on the PACE cluster. Note that code that returns incorrect results will receive significant penalties.
+
+* **Your grade will depend on two factors:**
+    * Performance of correct code sustained on the Intel Xeon Gold 6226. I may lower these buckets but won't raise them:
+        * Geomean 30% percent peak (60 points)
+        * Geomean 15% percent peak (50 points) 
+        * Geomean 5% percent peak (40 points) 
+        * Geomean 2% percent peak (20 points)
+        * Geomean 1% percent peak (10 points)
+    * Explanations of the performance features you observed (including what didn't work) (40 points)
+    
+
 # Notes
 
-* **Your grade will mostly depend on three factors:**
-    * Whether or not it is correct (ie. finishes running without exiting early)
-    * Performance sustained on the Intel Xeon Gold 6226.
-    * Explanations of the performance features you observed (including what didn't work)
-    
 * There are other formulations of matmul (e.g., [Strassen](http://en.wikipedia.org/wiki/Strassen_algorithm)) that are mathematically equivalent, but perform asymptotically fewer computations - we will not grade submissions that do fewer computations than the 2n^3 algorithm. This is actually an optional part of HW1.
 * You must use the GNU C Compiler for this assignment. If your code does not compile and run with GCC, it will not be graded.
 * Besides compiler intrinsic functions and built-ins, your code (`dgemm-optimized.c`) must only call into the C standard library.
