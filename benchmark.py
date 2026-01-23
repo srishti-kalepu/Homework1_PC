@@ -52,7 +52,7 @@ def run_dgemm(kernel, A, B, num_threads=1, max_time=1, trials_max=10000):
     return measurements
 
 
-def benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kernel_name):
+def benchmark_by_size(max_speed_gflops, naive_kernel_name, optimized_kernel_name, num_threads=12):
     test_sizes = [
         31,
         32,
@@ -89,14 +89,11 @@ def benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kerne
         input_data_A = np.random.rand(n, n).astype(np.float64)
         input_data_B = np.random.rand(n, n).astype(np.float64)
 
-        baseline_times = []
-        optimized_times = []
-
         baseline_result = run_dgemm(
             naive_kernel_name, input_data_A, input_data_B, num_threads=1
         )
         optimized_result = run_dgemm(
-            optimized_kernel_name, input_data_A, input_data_B, num_threads=1
+            optimized_kernel_name, input_data_A, input_data_B, num_threads=num_threads
         )
         assert np.allclose(
             baseline_result["C"], optimized_result["C"]
@@ -139,12 +136,11 @@ def benchmark_strong_scaling(optimized_kernel_name, matrix_size, max_num_threads
 
 def benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_threads):
     speedup = []
-    n_trials = 10
 
     first_time = None
 
     for thread_count in range(1, max_num_threads):
-        test_size = first_matrix_size * thread_count
+        test_size = np.ceil(first_matrix_size * np.sqrt(thread_count)).astype(int)
         input_data_A = np.random.rand(test_size, test_size).astype(np.float64)
         input_data_B = np.random.rand(test_size, test_size).astype(np.float64)
 
@@ -169,7 +165,7 @@ def benchmark_weak_scaling(optimized_kernel_name, first_matrix_size, max_num_thr
         speedup, 
         "Number of threads", 
         "Speedup over single thread", 
-        f"Weak Scaling Plot for MatMul matrices {first_matrix_size}-{first_matrix_size*max_num_threads}", 
+        f"Weak Scaling Plot for MatMul matrices {first_matrix_size}-{np.ceil(first_matrix_size * np.sqrt(max_num_threads)).astype(int)}", 
         "weak_scaling.png"
     )
 
@@ -208,7 +204,7 @@ if __name__ == "__main__":
         os.sys.exit(0)
 
     if "--benchmark" in os.sys.argv or len(os.sys.argv) == 1:
-        benchmark_single_thread(max_speed_gflops, naive_kernel_name, optimized_kernel_name)
+        benchmark_by_size(max_speed_gflops, naive_kernel_name, optimized_kernel_name)
     
     if "--strong-scaling" in os.sys.argv:
         matrix_size = 768
