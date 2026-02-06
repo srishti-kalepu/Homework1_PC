@@ -141,8 +141,9 @@ void square_dgemm(int n, double *A, double *B, double *C)
     // Limit threads to physical cores (12) to avoid HyperThreading overhead
     #pragma omp for collapse(2) schedule(static) 
     for (int i = 0; i < n; i += bs) {
+      for (int k = 0; k < n; k += bs) {
         for (int j = 0; j < n; j += bs) {
-            for (int k = 0; k < n; k += bs) {
+            
 
                 int M = min(bs, n - i);
                 int N = min(bs, n - j);
