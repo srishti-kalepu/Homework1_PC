@@ -15,74 +15,47 @@ const char *dgemm_desc = "Simple blocked dgemm.";
 #include <omp.h>
 
 
-static void do_block_avx512_8x16(
-    int lda, int M, int N, int K,
-    const double *A, const double *B, double *C)
-{
-    // i-step: 8, j-step: 16
-    for (int i = 0; i < M; i += 8) {
-        for (int j = 0; j < N; j += 16) {
-            
-            // Accumulators: 8 rows, 2 ZMMs per row (total 16 registers)
-            __m512d c00 = _mm512_loadu_pd(&C[(i+0)*lda + j]);
-            __m512d c01 = _mm512_loadu_pd(&C[(i+0)*lda + j + 8]);
-            __m512d c10 = _mm512_loadu_pd(&C[(i+1)*lda + j]);
-            __m512d c11 = _mm512_loadu_pd(&C[(i+1)*lda + j + 8]);
-            __m512d c20 = _mm512_loadu_pd(&C[(i+2)*lda + j]);
-            __m512d c21 = _mm512_loadu_pd(&C[(i+2)*lda + j + 8]);
-            __m512d c30 = _mm512_loadu_pd(&C[(i+3)*lda + j]);
-            __m512d c31 = _mm512_loadu_pd(&C[(i+3)*lda + j + 8]);
-            __m512d c40 = _mm512_loadu_pd(&C[(i+4)*lda + j]);
-            __m512d c41 = _mm512_loadu_pd(&C[(i+4)*lda + j + 8]);
-            __m512d c50 = _mm512_loadu_pd(&C[(i+5)*lda + j]);
-            __m512d c51 = _mm512_loadu_pd(&C[(i+5)*lda + j + 8]);
-            __m512d c60 = _mm512_loadu_pd(&C[(i+6)*lda + j]);
-            __m512d c61 = _mm512_loadu_pd(&C[(i+6)*lda + j + 8]);
-            __m512d c70 = _mm512_loadu_pd(&C[(i+7)*lda + j]);
-            __m512d c71 = _mm512_loadu_pd(&C[(i+7)*lda + j + 8]);
-
-            for (int k = 0; k < K; ++k) {
-                // Load 16 elements from row k of B (2 loads)
-                __m512d b0 = _mm512_loadu_pd(&B[k*lda + j]);
-                __m512d b1 = _mm512_loadu_pd(&B[k*lda + j + 8]);
-
-                // Broadcast A[i...i+7, k] and FMA
-                // Compilers are usually smart enough to map these to registers
-                c00 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), b0, c00);
-                c01 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), b1, c01);
-                
-                c10 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), b0, c10);
-                c11 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), b1, c11);
-                
-                c20 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), b0, c20);
-                c21 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), b1, c21);
-                
-                c30 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), b0, c30);
-                c31 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), b1, c31);
-                
-                c40 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+4)*lda + k]), b0, c40);
-                c41 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+4)*lda + k]), b1, c41);
-                
-                c50 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+5)*lda + k]), b0, c50);
-                c51 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+5)*lda + k]), b1, c51);
-                
-                c60 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+6)*lda + k]), b0, c60);
-                c61 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+6)*lda + k]), b1, c61);
-                
-                c70 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+7)*lda + k]), b0, c70);
-                c71 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+7)*lda + k]), b1, c71);
-            }
-
-            // Store results back
-            _mm512_storeu_pd(&C[(i+0)*lda + j], c00);
-            _mm512_storeu_pd(&C[(i+0)*lda + j + 8], c01);
-            _mm512_storeu_pd(&C[(i+1)*lda + j], c10);
-            _mm512_storeu_pd(&C[(i+1)*lda + j + 8], c11);
-            // ... (repeat for all 8 rows)
-            _mm512_storeu_pd(&C[(i+7)*lda + j], c70);
-            _mm512_storeu_pd(&C[(i+7)*lda + j + 8], c71);
-        }
+/* * Pack a block of A (M x K) into a contiguous buffer.
+ * A is stored in row-major; we keep it row-major but contiguous.
+ */
+static void pack_A(int lda, int M, int K, double *src, double *dst) {
+    for (int i = 0; i < M; ++i) {
+        memcpy(dst + i * K, src + i * lda, K * sizeof(double));
     }
+}
+
+/* * Pack a block of B (K x N) into a contiguous buffer.
+ * Crucial: We pack B in a way that facilitates 8-wide AVX loads.
+ */
+static void pack_B(int lda, int K, int N, double *src, double *dst) {
+    for (int k = 0; k < K; ++k) {
+        memcpy(dst + k * N, src + k * lda, N * sizeof(double));
+    }
+}
+
+/*
+ * Micro-kernel: 4x8 GEMM using AVX-512.
+ * Processes a 4x8 tile of C using 4 ZMM registers.
+ */
+static void kernel_4x8(int K, double *A, double *B, double *C, int ldc) {
+    __m512d c0 = _mm512_loadu_pd(C + 0 * ldc);
+    __m512d c1 = _mm512_loadu_pd(C + 1 * ldc);
+    __m512d c2 = _mm512_loadu_pd(C + 2 * ldc);
+    __m512d c3 = _mm512_loadu_pd(C + 3 * ldc);
+
+    for (int k = 0; k < K; ++k) {
+        __m512d b_row = _mm512_loadu_pd(B + k * 8); // Assuming N=8 for the kernel
+        
+        c0 = _mm512_fmadd_pd(_mm512_set1_pd(A[0 * K + k]), b_row, c0);
+        c1 = _mm512_fmadd_pd(_mm512_set1_pd(A[1 * K + k]), b_row, c1);
+        c2 = _mm512_fmadd_pd(_mm512_set1_pd(A[2 * K + k]), b_row, c2);
+        c3 = _mm512_fmadd_pd(_mm512_set1_pd(A[3 * K + k]), b_row, c3);
+    }
+
+    _mm512_storeu_pd(C + 0 * ldc, c0);
+    _mm512_storeu_pd(C + 1 * ldc, c1);
+    _mm512_storeu_pd(C + 2 * ldc, c2);
+    _mm512_storeu_pd(C + 3 * ldc, c3);
 }
 
 
@@ -92,26 +65,45 @@ static void do_block_avx512_8x16(
  * On exit, A and B maintain their input values. */
 
 void square_dgemm(int n, double *A, double *B, double *C) {
-
-    //__mmask8 final_mask = get_mask(n % 8);
-    
-    #pragma omp parallel for collapse(2) if(n > 128)
+    // Parallelize over block rows of C
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int i = 0; i < n; i += BLOCK_SIZE) {
         for (int j = 0; j < n; j += BLOCK_SIZE) {
-            for (int k = 0; k < n; k += BLOCK_SIZE) {
-                
-                int M_block = min(BLOCK_SIZE, n - i);
-                int N_block = min(BLOCK_SIZE, n - j);
-                int K_block = min(BLOCK_SIZE, n - k);
+            
+            int M = min(BLOCK_SIZE, n - i);
+            int N = min(BLOCK_SIZE, n - j);
+            
+            // Local buffers for packing (stack allocated for thread safety)
+            double packedA[BLOCK_SIZE * BLOCK_SIZE] __attribute__((aligned(64)));
+            double packedB[BLOCK_SIZE * BLOCK_SIZE] __attribute__((aligned(64)));
 
-                // Call the masked microkernel directly on the original pointers
-                // Use 'n' as the lda (stride)
-                do_block_avx512_8x16(
-                    n, M_block, N_block, K_block,
-                    A + i*n + k, 
-                    B + k*n + j, 
-                    C + i*n + j
-                );
+            for (int k = 0; k < n; k += BLOCK_SIZE) {
+                int K = min(BLOCK_SIZE, n - k);
+
+                // Pack current blocks
+                pack_A(n, M, K, A + i * n + k, packedA);
+                pack_B(n, K, N, B + k * n + j, packedB);
+
+                // Inner loops using the 4x8 kernel
+                for (int ii = 0; ii < M; ii += 4) {
+                    for (int jj = 0; jj < N; jj += 8) {
+                        // Handle cases where M or N are not multiples of 4 or 8
+                        if (ii + 4 <= M && jj + 8 <= N) {
+                            kernel_4x8(K, packedA + ii * K, packedB + jj, C + (i + ii) * n + (j + jj), n);
+                        } else {
+                            // Fallback for fringe/edge cases within the block
+                            for (int x = ii; x < min(ii + 4, M); ++x) {
+                                for (int y = jj; y < min(jj + 8, N); ++y) {
+                                    double cij = C[(i + x) * n + (j + y)];
+                                    for (int z = 0; z < K; ++z) {
+                                        cij += packedA[x * K + z] * packedB[z * N + (y - jj)];
+                                    }
+                                    C[(i + x) * n + (j + y)] = cij;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
