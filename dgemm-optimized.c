@@ -22,9 +22,8 @@ static void do_block_avx512_4x8(int lda, int M, int N, int K,
     int i = 0;
     for (; i + 3 < M; i += 4) {
         int j = 0;
+        // 1. Main Vector Loop (8 columns at a time)
         for (; j + 7 < N; j += 8) {
-            
-            // Pointer setup for the C block (4 rows)
             double *c_ptr0 = C + (i + 0) * lda + j;
             double *c_ptr1 = C + (i + 1) * lda + j;
             double *c_ptr2 = C + (i + 2) * lda + j;
@@ -36,28 +35,11 @@ static void do_block_avx512_4x8(int lda, int M, int N, int K,
             __m512d c3 = _mm512_loadu_pd(c_ptr3);
 
             for (int k = 0; k < K; ++k) {
-
-                // Prefetch the next row of B or the next part of current row
-                // 64 bytes is the size of one AVX-512 register (8 doubles)
-                _mm_prefetch((const char*)(B + (k + 1) * lda + j), _MM_HINT_T0);
-                
-                // Optional: Prefetch the next elements of A
-                _mm_prefetch((const char*)(A + (i + 0) * lda + k + 8), _MM_HINT_T0);
-
-                
-                // Load 8 doubles from B (row k)
                 __m512d b = _mm512_loadu_pd(B + k * lda + j);
-
-                // Broadcast A[i][k] values
-                __m512d a0 = _mm512_set1_pd(*(A + (i + 0) * lda + k));
-                __m512d a1 = _mm512_set1_pd(*(A + (i + 1) * lda + k));
-                __m512d a2 = _mm512_set1_pd(*(A + (i + 2) * lda + k));
-                __m512d a3 = _mm512_set1_pd(*(A + (i + 3) * lda + k));
-
-                c0 = _mm512_fmadd_pd(a0, b, c0);
-                c1 = _mm512_fmadd_pd(a1, b, c1);
-                c2 = _mm512_fmadd_pd(a2, b, c2);
-                c3 = _mm512_fmadd_pd(a3, b, c3);
+                c0 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 0) * lda + k]), b, c0);
+                c1 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 1) * lda + k]), b, c1);
+                c2 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 2) * lda + k]), b, c2);
+                c3 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 3) * lda + k]), b, c3);
             }
 
             _mm512_storeu_pd(c_ptr0, c0);
@@ -66,26 +48,60 @@ static void do_block_avx512_4x8(int lda, int M, int N, int K,
             _mm512_storeu_pd(c_ptr3, c3);
         }
 
-        // Scalar cleanup for remaining columns
-        for (; j < N; ++j) {
-            for (int ii = 0; ii < 4; ++ii) {
-                double *cij_ptr = C + (i + ii) * lda + j;
-                double cij = *cij_ptr;
-                for (int k = 0; k < K; ++k)
-                    cij += *(A + (i + ii) * lda + k) * *(B + k * lda + j);
-                *cij_ptr = cij;
+        // 2. Parallel Column Cleanup (Masked AVX-512)
+        // Handles remaining columns (1-7) for the 4 rows currently in flight
+        if (j < N) {
+            int remaining_cols = N - j;
+            // Create a mask where the first 'remaining_cols' bits are 1
+            __mmask8 mask = (1U << remaining_cols) - 1;
+
+            double *c_ptr0 = C + (i + 0) * lda + j;
+            double *c_ptr1 = C + (i + 1) * lda + j;
+            double *c_ptr2 = C + (i + 2) * lda + j;
+            double *c_ptr3 = C + (i + 3) * lda + j;
+
+            // Load using mask (zeros out elements beyond N)
+            __m512d c0 = _mm512_maskz_loadu_pd(mask, c_ptr0);
+            __m512d c1 = _mm512_maskz_loadu_pd(mask, c_ptr1);
+            __m512d c2 = _mm512_maskz_loadu_pd(mask, c_ptr2);
+            __m512d c3 = _mm512_maskz_loadu_pd(mask, c_ptr3);
+
+            for (int k = 0; k < K; ++k) {
+                __m512d b = _mm512_maskz_loadu_pd(mask, B + k * lda + j);
+                c0 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 0) * lda + k]), b, c0);
+                c1 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 1) * lda + k]), b, c1);
+                c2 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 2) * lda + k]), b, c2);
+                c3 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + 3) * lda + k]), b, c3);
             }
+            // Store using mask (prevents overwriting memory beyond C's boundary)
+            _mm512_mask_storeu_pd(c_ptr0, mask, c0);
+            _mm512_mask_storeu_pd(c_ptr1, mask, c1);
+            _mm512_mask_storeu_pd(c_ptr2, mask, c2);
+            _mm512_mask_storeu_pd(c_ptr3, mask, c3);
         }
     }
 
-    // Scalar cleanup for remaining rows
+    // 3. Row Cleanup (M % 4 != 0)
+    // We can also use masked loads here for any remaining individual rows
     for (; i < M; ++i) {
-        for (int j = 0; j < N; ++j) {
-            double *cij_ptr = C + i * lda + j;
-            double cij = *cij_ptr;
-            for (int k = 0; k < K; ++k)
-                cij += *(A + i * lda + k) * *(B + k * lda + j);
-            *cij_ptr = cij;
+        int j = 0;
+        for (; j + 7 < N; j += 8) {
+            __m512d c0 = _mm512_loadu_pd(C + i * lda + j);
+            for (int k = 0; k < K; ++k) {
+                __m512d b = _mm512_loadu_pd(B + k * lda + j);
+                c0 = _mm512_fmadd_pd(_mm512_set1_pd(A[i * lda + k]), b, c0);
+            }
+            _mm512_storeu_pd(C + i * lda + j, c0);
+        }
+        // Final corner cleanup (last row, last few columns)
+        if (j < N) {
+            __mmask8 mask = (1U << (N - j)) - 1;
+            __m512d c0 = _mm512_maskz_loadu_pd(mask, C + i * lda + j);
+            for (int k = 0; k < K; ++k) {
+                __m512d b = _mm512_maskz_loadu_pd(mask, B + k * lda + j);
+                c0 = _mm512_fmadd_pd(_mm512_set1_pd(A[i * lda + k]), b, c0);
+            }
+            _mm512_mask_storeu_pd(C + i * lda + j, mask, c0);
         }
     }
 }
