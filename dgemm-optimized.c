@@ -1,7 +1,7 @@
 const char *dgemm_desc = "Simple blocked dgemm.";
 
 #ifndef BLOCK_SIZE
-#define BLOCK_SIZE 41
+#define BLOCK_SIZE 181
 #endif
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -13,13 +13,49 @@ const char *dgemm_desc = "Simple blocked dgemm.";
  */
 static void do_block(int lda, int M, int N, int K, double *A, double *B,
                      double *C) {
-  // For each row i of A
-  for (int i = 0; i < M; ++i) {
-    // For each column j of B
-    for (int j = 0; j < N; ++j) {
-      // Compute C(i,j)
+  // Register blocking: 2x2 micro-kernel
+  int i = 0, j = 0, k = 0;
+  for (i = 0; i <= M - 2; i += 2) {
+    for (j = 0; j <= N - 2; j += 2) {
+      // Register block for C
+      double c00 = C[(i + 0) * lda + (j + 0)];
+      double c01 = C[(i + 0) * lda + (j + 1)];
+      double c10 = C[(i + 1) * lda + (j + 0)];
+      double c11 = C[(i + 1) * lda + (j + 1)];
+
+      for (k = 0; k < K; ++k) {
+        double a0 = A[(i + 0) * lda + k];
+        double a1 = A[(i + 1) * lda + k];
+        double b0 = B[k * lda + (j + 0)];
+        double b1 = B[k * lda + (j + 1)];
+
+        c00 += a0 * b0;
+        c01 += a0 * b1;
+        c10 += a1 * b0;
+        c11 += a1 * b1;
+      }
+
+      C[(i + 0) * lda + (j + 0)] = c00;
+      C[(i + 0) * lda + (j + 1)] = c01;
+      C[(i + 1) * lda + (j + 0)] = c10;
+      C[(i + 1) * lda + (j + 1)] = c11;
+    }
+    // Handle remaining columns (N not divisible by 2)
+    for (j = j; j < N; ++j) {
+      for (int ii = 0; ii < 2; ++ii) {
+        double cij = C[(i + ii) * lda + j];
+        for (k = 0; k < K; ++k) {
+          cij += A[(i + ii) * lda + k] * B[k * lda + j];
+        }
+        C[(i + ii) * lda + j] = cij;
+      }
+    }
+  }
+  // Handle remaining rows (M not divisible by 2)
+  for (i = i; i < M; ++i) {
+    for (j = 0; j < N; ++j) {
       double cij = C[i * lda + j];
-      for (int k = 0; k < K; ++k) {
+      for (k = 0; k < K; ++k) {
         cij += A[i * lda + k] * B[k * lda + j];
       }
       C[i * lda + j] = cij;
