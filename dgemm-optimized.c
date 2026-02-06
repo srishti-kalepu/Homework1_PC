@@ -13,6 +13,7 @@ const char *dgemm_desc = "Simple blocked dgemm.";
  */
 #include <immintrin.h>
 #include <omp.h>
+#include <string.h>
 
 
 /* * Pack a block of A (M x K) into a contiguous buffer.
