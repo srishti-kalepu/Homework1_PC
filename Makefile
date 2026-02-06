@@ -1,7 +1,7 @@
 CC = gcc
 CXX = g++
-CXXFLAGS += -std=c++20 -fopenmp
-CFLAGS += -fopenmp
+CXXFLAGS += -std=c++20 -fopenmp -O3
+CFLAGS += -fopenmp -O3
 LDLIBS +=
 
 all: dgemm-naive dgemm-optimized
