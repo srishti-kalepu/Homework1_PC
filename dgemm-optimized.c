@@ -134,30 +134,37 @@ static void do_block_avx512_4x16(int lda, int M, int N, int K,
 
 void square_dgemm(int n, double *A, double *B, double *C)
 {
-    // Determine block size dynamically based on matrix size n
+    // 1. Determine block size dynamically
     int bs = get_optimal_block_size(n);
-  #pragma omp parallel num_threads(12)
-  {
-    // Limit threads to physical cores (12) to avoid HyperThreading overhead
-    #pragma omp for collapse(2) schedule(static) 
-    for (int i = 0; i < n; i += bs) {
-      for (int k = 0; k < n; k += bs) {
-        for (int j = 0; j < n; j += bs) {
-            
 
+    // 2. Persistent parallel region to reduce fork/join overhead for strong scaling
+    #pragma omp parallel num_threads(12)
+    {
+        // IKJ Order: 
+        // i: Moves down rows of A and C
+        // k: Moves across rows of A and down columns of B
+        // j: Moves across columns of B and C (Best for Row-Major Cache locality)
+        
+        #pragma omp for collapse(1) schedule(static)
+        for (int i = 0; i < n; i += bs) {
+            for (int k = 0; k < n; k += bs) {
+                
+                // Pre-calculate M and K since they don't change in the innermost 'j' loop
                 int M = min(bs, n - i);
-                int N = min(bs, n - j);
                 int K = min(bs, n - k);
+                
+                for (int j = 0; j < n; j += bs) {
+                    int N = min(bs, n - j);
 
-                do_block_avx512_4x16(
-                    n,
-                    M, N, K,
-                    A + i * n + k,
-                    B + k * n + j,
-                    C + i * n + j
-                );
+                    do_block_avx512_4x16(
+                        n,
+                        M, N, K,
+                        A + i * n + k,
+                        B + k * n + j,
+                        C + i * n + j
+                    );
+                }
             }
         }
     }
-  }
 }
