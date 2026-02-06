@@ -15,6 +15,22 @@ const char *dgemm_desc = "Simple blocked dgemm.";
 #include <omp.h>
 
 /**
+ * Heuristic to determine block size based on matrix dimension N.
+ * Target: Fit working set of A, B, C blocks into L2 Cache (1MB on Xeon Gold).
+ */
+int get_optimal_block_size(int n) {
+    // If the matrix is small enough to fit entirely in L2/L3, 
+    // process it as a single block to avoid loop overhead.
+    if (n <= 128) {
+        return n;
+    }
+    
+    // For larger matrices, stick to 128 (128KB per matrix block).
+    // 3 blocks * 128KB = 384KB working set << 1MB L2 Cache.
+    return 128;
+}
+
+/**
  * Kernel: 4x16 Register Blocked with K-unrolling and Aligned Loads
  * Optimized for Intel Xeon Gold (Cascade Lake)
  */
@@ -98,14 +114,18 @@ static void do_block_avx512_4x16(int lda, int M, int N, int K,
 
 void square_dgemm(int n, double *A, double *B, double *C)
 {
-    #pragma omp parallel for collapse(2) schedule(static)
-    for (int i = 0; i < n; i += BLOCK_SIZE) {
-        for (int j = 0; j < n; j += BLOCK_SIZE) {
-            for (int k = 0; k < n; k += BLOCK_SIZE) {
+    // Determine block size dynamically based on matrix size n
+    int bs = get_optimal_block_size(n);
 
-                int M = min(BLOCK_SIZE, n - i);
-                int N = min(BLOCK_SIZE, n - j);
-                int K = min(BLOCK_SIZE, n - k);
+    // Limit threads to physical cores (12) to avoid HyperThreading overhead
+    #pragma omp parallel for collapse(2) schedule(static) num_threads(12)
+    for (int i = 0; i < n; i += bs) {
+        for (int j = 0; j < n; j += bs) {
+            for (int k = 0; k < n; k += bs) {
+
+                int M = min(bs, n - i);
+                int N = min(bs, n - j);
+                int K = min(bs, n - k);
 
                 do_block_avx512_4x16(
                     n,
