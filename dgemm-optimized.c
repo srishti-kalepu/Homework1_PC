@@ -92,14 +92,8 @@ static void do_block_avx512_8x16(
  * On exit, A and B maintain their input values. */
 
 void square_dgemm(int n, double *A, double *B, double *C) {
-    // 1. If N is very small (e.g., < 16), use a simple scalar loop.
-    // The overhead of setting up SIMD masks is more than the math itself.
-    if (n < 16) {
-        // Simple ijk loop here...
-        return;
-    }
 
-    __mmask8 final_mask = get_mask(n % 8);
+    //__mmask8 final_mask = get_mask(n % 8);
     
     #pragma omp parallel for collapse(2) if(n > 128)
     for (int i = 0; i < n; i += BLOCK_SIZE) {
