@@ -12,6 +12,7 @@ const char *dgemm_desc = "Simple blocked dgemm.";
  * where C is M-by-N, A is M-by-K, and B is K-by-N.
  */
 #include <immintrin.h>
+#include <omp.h>
 
 static void do_block_avx512_4x8(int lda, int M, int N, int K,
                                 const double *A,
@@ -85,6 +86,7 @@ static void do_block_avx512_4x8(int lda, int M, int N, int K,
 
 void square_dgemm(int n, double *A, double *B, double *C)
 {
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int i = 0; i < n; i += BLOCK_SIZE) {
         for (int j = 0; j < n; j += BLOCK_SIZE) {
             for (int k = 0; k < n; k += BLOCK_SIZE) {
