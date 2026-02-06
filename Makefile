@@ -1,9 +1,9 @@
 CC = gcc
 CXX = g++
 CXXFLAGS += -std=c++20 -fopenmp -O3 -mavx512f
-CFLAGS += -fopenmp -O3 -mavx512f
+CFLAGS += -fopenmp -O3 -march=native
 LDLIBS +=
-export OMP_NUM_THREADS=20 
+export OMP_NUM_THREADS=8 
 all: dgemm-naive dgemm-optimized
 
 clean:
