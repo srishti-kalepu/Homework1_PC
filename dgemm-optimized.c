@@ -97,7 +97,7 @@ void square_dgemm(int n, double *A, double *B, double *C) {
                                 for (int y = jj; y < min(jj + 8, N); ++y) {
                                     double cij = C[(i + x) * n + (j + y)];
                                     for (int z = 0; z < K; ++z) {
-                                        cij += packedA[x * K + z] * packedB[z * N + (y - jj)];
+                                        cij += packedA[(x) * K + z] * packedB[z * N + (y)];
                                     }
                                     C[(i + x) * n + (j + y)] = cij;
                                 }
