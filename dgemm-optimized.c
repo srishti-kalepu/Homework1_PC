@@ -21,13 +21,13 @@ const char *dgemm_desc = "Simple blocked dgemm.";
 int get_optimal_block_size(int n) {
     // If the matrix is small enough to fit entirely in L2/L3, 
     // process it as a single block to avoid loop overhead.
-    if (n <= 128) {
+    if (n <= 64) {
         return n;
     }
     
     // For larger matrices, stick to 128 (128KB per matrix block).
     // 3 blocks * 128KB = 384KB working set << 1MB L2 Cache.
-    return 128;
+    return 64;
 }
 
 /**
