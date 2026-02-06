@@ -116,8 +116,7 @@ void square_dgemm(int n, double *A, double *B, double *C) {
                     n, M_block, N_block, K_block,
                     A + i*n + k, 
                     B + k*n + j, 
-                    C + i*n + j,
-                    final_mask, (N_block % 8 != 0)
+                    C + i*n + j
                 );
             }
         }
