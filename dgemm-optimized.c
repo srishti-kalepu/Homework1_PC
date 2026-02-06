@@ -36,6 +36,15 @@ static void do_block_avx512_4x8(int lda, int M, int N, int K,
             __m512d c3 = _mm512_loadu_pd(c_ptr3);
 
             for (int k = 0; k < K; ++k) {
+
+                // Prefetch the next row of B or the next part of current row
+                // 64 bytes is the size of one AVX-512 register (8 doubles)
+                _mm_prefetch((const char*)(B + (k + 1) * lda + j), _MM_HINT_T0);
+                
+                // Optional: Prefetch the next elements of A
+                _mm_prefetch((const char*)(A + (i + 0) * lda + k + 8), _MM_HINT_T0);
+
+                
                 // Load 8 doubles from B (row k)
                 __m512d b = _mm512_loadu_pd(B + k * lda + j);
 
