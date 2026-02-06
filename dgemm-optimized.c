@@ -136,9 +136,10 @@ void square_dgemm(int n, double *A, double *B, double *C)
 {
     // Determine block size dynamically based on matrix size n
     int bs = get_optimal_block_size(n);
-
+  #pragma omp parallel num_threads(12)
+  {
     // Limit threads to physical cores (12) to avoid HyperThreading overhead
-    #pragma omp parallel for collapse(2) schedule(static) num_threads(12)
+    #pragma omp for collapse(2) schedule(static) 
     for (int i = 0; i < n; i += bs) {
         for (int j = 0; j < n; j += bs) {
             for (int k = 0; k < n; k += bs) {
@@ -157,4 +158,5 @@ void square_dgemm(int n, double *A, double *B, double *C)
             }
         }
     }
+  }
 }
