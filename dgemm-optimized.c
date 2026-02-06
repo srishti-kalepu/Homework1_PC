@@ -109,7 +109,7 @@ void square_dgemm(int n, double *A, double *B, double *C)
                 int N = min(BLOCK_SIZE, n - j);
                 int K = min(BLOCK_SIZE, n - k);
 
-                do_block_avx512_4x8(
+                do_block_avx512_4x16(
                     n,
                     M, N, K,
                     A + i * n + k,
