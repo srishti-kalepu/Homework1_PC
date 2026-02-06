@@ -19,22 +19,19 @@ static void do_block_avx512(int lda, int M, int N, int K,
                             double *C)
 {
     for (int i = 0; i < M; ++i) {
+        int j = 0;
         // Vectorized loop: 8 columns at a time
-        for (int j = 0; j + 7 < N; j += 8) {
-
+        for (; j + 7 < N; j += 8) {
             __m512d c = _mm512_loadu_pd(&C[i * lda + j]);
-
             for (int k = 0; k < K; ++k) {
                 __m512d a = _mm512_set1_pd(A[i * lda + k]);
                 __m512d b = _mm512_loadu_pd(&B[k * lda + j]);
                 c = _mm512_fmadd_pd(a, b, c);
             }
-
             _mm512_storeu_pd(&C[i * lda + j], c);
         }
-
-        // Remainder columns (scalar cleanup)
-        for (int j = 0; j < N; ++j) {
+        // Remainder columns (scalar cleanup, only for columns not handled by vectorized loop)
+        for (; j < N; ++j) {
             double cij = C[i * lda + j];
             for (int k = 0; k < K; ++k) {
                 cij += A[i * lda + k] * B[k * lda + j];
