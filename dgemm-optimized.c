@@ -1,7 +1,7 @@
 const char *dgemm_desc = "Simple blocked dgemm.";
 
 #ifndef BLOCK_SIZE
-#define BLOCK_SIZE 128
+#define BLOCK_SIZE 64
 #endif
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -14,41 +14,73 @@ const char *dgemm_desc = "Simple blocked dgemm.";
 #include <immintrin.h>
 #include <omp.h>
 
-// Helper to create a mask for the remaining N elements
-// e.g., if remainder is 3, mask is 00000111 (binary)
-inline __mmask8 get_mask(int remainder) {
-    return (__mmask8)((1U << remainder) - 1);
-}
 
-static void do_block_avx512_masked(
+static void do_block_avx512_8x16(
     int lda, int M, int N, int K,
-    const double *A, const double *B, double *C,
-    __mmask8 final_mask, int is_n_partial) 
+    const double *A, const double *B, double *C)
 {
-    for (int i = 0; i < M; i += 4) {
-        for (int j = 0; j < N; j += 8) {
-            __mmask8 m = (is_n_partial && (j + 8 > N)) ? final_mask : 0xFF;
-
-            // Masked loads prevent out-of-bounds memory access
-            __m512d c0 = _mm512_maskz_loadu_pd(m, &C[(i+0)*lda + j]);
-            __m512d c1 = _mm512_maskz_loadu_pd(m, &C[(i+1)*lda + j]);
-            __m512d c2 = _mm512_maskz_loadu_pd(m, &C[(i+2)*lda + j]);
-            __m512d c3 = _mm512_maskz_loadu_pd(m, &C[(i+3)*lda + j]);
+    // i-step: 8, j-step: 16
+    for (int i = 0; i < M; i += 8) {
+        for (int j = 0; j < N; j += 16) {
+            
+            // Accumulators: 8 rows, 2 ZMMs per row (total 16 registers)
+            __m512d c00 = _mm512_loadu_pd(&C[(i+0)*lda + j]);
+            __m512d c01 = _mm512_loadu_pd(&C[(i+0)*lda + j + 8]);
+            __m512d c10 = _mm512_loadu_pd(&C[(i+1)*lda + j]);
+            __m512d c11 = _mm512_loadu_pd(&C[(i+1)*lda + j + 8]);
+            __m512d c20 = _mm512_loadu_pd(&C[(i+2)*lda + j]);
+            __m512d c21 = _mm512_loadu_pd(&C[(i+2)*lda + j + 8]);
+            __m512d c30 = _mm512_loadu_pd(&C[(i+3)*lda + j]);
+            __m512d c31 = _mm512_loadu_pd(&C[(i+3)*lda + j + 8]);
+            __m512d c40 = _mm512_loadu_pd(&C[(i+4)*lda + j]);
+            __m512d c41 = _mm512_loadu_pd(&C[(i+4)*lda + j + 8]);
+            __m512d c50 = _mm512_loadu_pd(&C[(i+5)*lda + j]);
+            __m512d c51 = _mm512_loadu_pd(&C[(i+5)*lda + j + 8]);
+            __m512d c60 = _mm512_loadu_pd(&C[(i+6)*lda + j]);
+            __m512d c61 = _mm512_loadu_pd(&C[(i+6)*lda + j + 8]);
+            __m512d c70 = _mm512_loadu_pd(&C[(i+7)*lda + j]);
+            __m512d c71 = _mm512_loadu_pd(&C[(i+7)*lda + j + 8]);
 
             for (int k = 0; k < K; ++k) {
-                __m512d b  = _mm512_maskz_loadu_pd(m, &B[k*lda + j]);
+                // Load 16 elements from row k of B (2 loads)
+                __m512d b0 = _mm512_loadu_pd(&B[k*lda + j]);
+                __m512d b1 = _mm512_loadu_pd(&B[k*lda + j + 8]);
+
+                // Broadcast A[i...i+7, k] and FMA
+                // Compilers are usually smart enough to map these to registers
+                c00 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), b0, c00);
+                c01 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), b1, c01);
                 
-                // A is accessed by scalars, so we just check bounds for i
-                c0 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), b, c0);
-                if(i+1 < M) c1 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), b, c1);
-                if(i+2 < M) c2 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), b, c2);
-                if(i+3 < M) c3 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), b, c3);
+                c10 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), b0, c10);
+                c11 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), b1, c11);
+                
+                c20 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), b0, c20);
+                c21 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), b1, c21);
+                
+                c30 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), b0, c30);
+                c31 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), b1, c31);
+                
+                c40 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+4)*lda + k]), b0, c40);
+                c41 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+4)*lda + k]), b1, c41);
+                
+                c50 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+5)*lda + k]), b0, c50);
+                c51 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+5)*lda + k]), b1, c51);
+                
+                c60 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+6)*lda + k]), b0, c60);
+                c61 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+6)*lda + k]), b1, c61);
+                
+                c70 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+7)*lda + k]), b0, c70);
+                c71 = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+7)*lda + k]), b1, c71);
             }
 
-            _mm512_mask_storeu_pd(&C[(i+0)*lda + j], m, c0);
-            if(i+1 < M) _mm512_mask_storeu_pd(&C[(i+1)*lda + j], m, c1);
-            if(i+2 < M) _mm512_mask_storeu_pd(&C[(i+2)*lda + j], m, c2);
-            if(i+3 < M) _mm512_mask_storeu_pd(&C[(i+3)*lda + j], m, c3);
+            // Store results back
+            _mm512_storeu_pd(&C[(i+0)*lda + j], c00);
+            _mm512_storeu_pd(&C[(i+0)*lda + j + 8], c01);
+            _mm512_storeu_pd(&C[(i+1)*lda + j], c10);
+            _mm512_storeu_pd(&C[(i+1)*lda + j + 8], c11);
+            // ... (repeat for all 8 rows)
+            _mm512_storeu_pd(&C[(i+7)*lda + j], c70);
+            _mm512_storeu_pd(&C[(i+7)*lda + j + 8], c71);
         }
     }
 }
