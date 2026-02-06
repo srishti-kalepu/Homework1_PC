@@ -3,7 +3,7 @@ CXX = g++
 CXXFLAGS += -std=c++20 -fopenmp -O3 -mavx512f
 CFLAGS += -fopenmp -O3 -mavx512f
 LDLIBS +=
-
+export OMP_NUM_THREADS=20 
 all: dgemm-naive dgemm-optimized
 
 clean:
