@@ -13,6 +13,8 @@ const char *dgemm_desc = "Simple blocked dgemm.";
  */
 #include <immintrin.h>
 #include <omp.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define roundup8(x) (((x) + 7) & ~7)
 
