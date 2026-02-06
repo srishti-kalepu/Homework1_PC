@@ -31,77 +31,97 @@ int get_optimal_block_size(int n) {
 }
 
 /**
- * Kernel: 4x16 Register Blocked with K-unrolling and Aligned Loads
- * Optimized for Intel Xeon Gold (Cascade Lake)
+ * Kernel: 4x16 with Unified Masking (Virtual Padding)
+ * This removes the need for separate cleanup loops by masking the 
+ * load/store operations at the edges.
  */
 static void do_block_avx512_4x16(int lda, int M, int N, int K,
                                  const double *A,
                                  const double *B,
                                  double *C)
 {
-    int i = 0;
-    // Main 4x16 loop
-    for (; i + 3 < M; i += 4) {
-        int j = 0;
-        for (; j + 15 < N; j += 16) {
-            double *c_p0 = C + (i + 0) * lda + j;
-            double *c_p1 = C + (i + 1) * lda + j;
-            double *c_p2 = C + (i + 2) * lda + j;
-            double *c_p3 = C + (i + 3) * lda + j;
-
-            // USE LOADU (unaligned) to prevent crashes from benchmark-provided memory
-            __m512d c0a = _mm512_loadu_pd(c_p0);     __m512d c0b = _mm512_loadu_pd(c_p0 + 8);
-            __m512d c1a = _mm512_loadu_pd(c_p1);     __m512d c1b = _mm512_loadu_pd(c_p1 + 8);
-            __m512d c2a = _mm512_loadu_pd(c_p2);     __m512d c2b = _mm512_loadu_pd(c_p2 + 8);
-            __m512d c3a = _mm512_loadu_pd(c_p3);     __m512d c3b = _mm512_loadu_pd(c_p3 + 8);
-
-            for (int k = 0; k < K; ++k) {
-                __m512d ba = _mm512_loadu_pd(B + k * lda + j);
-                __m512d bb = _mm512_loadu_pd(B + k * lda + j + 8);
-
-                c0a = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), ba, c0a);
-                c0b = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+0)*lda + k]), bb, c0b);
-                c1a = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), ba, c1a);
-                c1b = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+1)*lda + k]), bb, c1b);
-                c2a = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), ba, c2a);
-                c2b = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+2)*lda + k]), bb, c2b);
-                c3a = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), ba, c3a);
-                c3b = _mm512_fmadd_pd(_mm512_set1_pd(A[(i+3)*lda + k]), bb, c3b);
-            }
-
-            _mm512_storeu_pd(c_p0, c0a); _mm512_storeu_pd(c_p0 + 8, c0b);
-            _mm512_storeu_pd(c_p1, c1a); _mm512_storeu_pd(c_p1 + 8, c1b);
-            _mm512_storeu_pd(c_p2, c2a); _mm512_storeu_pd(c_p2 + 8, c2b);
-            _mm512_storeu_pd(c_p3, c3a); _mm512_storeu_pd(c_p3 + 8, c3b);
-        }
-
-        // Cleanup: Use maskz_loadu (Unaligned Masked Load)
-        for (; j < N; j += 8) {
+    // Iterate through Rows (M)
+    // We still step by 4. If M is not a multiple of 4, we handle the 
+    // valid rows via the 'mask_store' at the end.
+    for (int i = 0; i < M; i += 4) {
+        
+        // Determine how many rows are actually valid (1 to 4)
+        int rows_left = M - i;
+        
+        // Iterate through Columns (N)
+        // We step by 16 (two registers). We handle the edge by calculating a mask.
+        for (int j = 0; j < N; j += 16) {
+            
+            // --- 1. Calculate Column Masks (Padding Logic) ---
             int rem = N - j;
-            __mmask8 mask = (rem >= 8) ? 0xFF : (1U << rem) - 1;
-            for (int r = 0; r < 4; ++r) {
-                double *c_ptr = C + (i + r) * lda + j;
-                __m512d c_v = _mm512_maskz_loadu_pd(mask, c_ptr);
-                for (int k = 0; k < K; ++k) {
-                    __m512d b_v = _mm512_maskz_loadu_pd(mask, B + k * lda + j);
-                    c_v = _mm512_fmadd_pd(_mm512_set1_pd(A[(i + r) * lda + k]), b_v, c_v);
-                }
-                _mm512_mask_storeu_pd(c_ptr, mask, c_v);
-            }
-        }
-    }
+            
+            // Mask for the first 8 columns (ZMM A)
+            // If rem >= 8, we want all 1s (0xFF). Else, 1s for the remainder.
+            __mmask8 mask_a = (rem >= 8) ? 0xFF : (1U << rem) - 1;
+            
+            // Mask for the next 8 columns (ZMM B)
+            // If rem >= 16, all 1s. If rem < 8, all 0s. Else, 1s for (rem-8).
+            __mmask8 mask_b = (rem >= 16) ? 0xFF : (rem > 8 ? (1U << (rem - 8)) - 1 : 0x00);
 
-    // Row cleanup
-    for (; i < M; ++i) {
-        for (int j_rem = 0; j_rem < N; j_rem += 8) {
-            int rem = N - j_rem;
-            __mmask8 mask = (rem >= 8) ? 0xFF : (1U << rem) - 1;
-            __m512d c_v = _mm512_maskz_loadu_pd(mask, C + i * lda + j_rem);
+            // --- 2. Initialize Accumulators with Masked Loads (Virtual Padding) ---
+            // _mm512_maskz_loadu_pd loads data where mask is 1, and 0.0 where mask is 0.
+            // This safely "pads" the registers with zeros for out-of-bound lanes.
+            
+            double *cp = C + i * lda + j;
+            
+            // We blindly compute 4 rows. We will only store the valid ones later.
+            // Note: We use the same column masks (mask_a/b) for all rows.
+            __m512d c0a = _mm512_maskz_loadu_pd(mask_a, cp + 0*lda); 
+            __m512d c0b = _mm512_maskz_loadu_pd(mask_b, cp + 0*lda + 8);
+            
+            __m512d c1a = _mm512_maskz_loadu_pd(mask_a, cp + 1*lda); 
+            __m512d c1b = _mm512_maskz_loadu_pd(mask_b, cp + 1*lda + 8);
+            
+            __m512d c2a = _mm512_maskz_loadu_pd(mask_a, cp + 2*lda); 
+            __m512d c2b = _mm512_maskz_loadu_pd(mask_b, cp + 2*lda + 8);
+            
+            __m512d c3a = _mm512_maskz_loadu_pd(mask_a, cp + 3*lda); 
+            __m512d c3b = _mm512_maskz_loadu_pd(mask_b, cp + 3*lda + 8);
+
+            // --- 3. Compute Loop (K) ---
             for (int k = 0; k < K; ++k) {
-                __m512d b_v = _mm512_maskz_loadu_pd(mask, B + k * lda + j_rem);
-                c_v = _mm512_fmadd_pd(_mm512_set1_pd(A[i * lda + k]), b_v, c_v);
+                // Load B with masking (pads edges with 0.0)
+                // If B is padded with 0.0, then C += A * 0.0 ensures accumulator safety
+                __m512d ba = _mm512_maskz_loadu_pd(mask_a, B + k * lda + j);
+                __m512d bb = _mm512_maskz_loadu_pd(mask_b, B + k * lda + j + 8);
+
+                // Broadcast A values
+                // We must be careful not to read invalid A rows.
+                // We use a ternary check. This adds slight overhead but is safe.
+                __m512d a0 = _mm512_set1_pd(A[(i + 0) * lda + k]);
+                __m512d a1 = (rows_left > 1) ? _mm512_set1_pd(A[(i + 1) * lda + k]) : _mm512_setzero_pd();
+                __m512d a2 = (rows_left > 2) ? _mm512_set1_pd(A[(i + 2) * lda + k]) : _mm512_setzero_pd();
+                __m512d a3 = (rows_left > 3) ? _mm512_set1_pd(A[(i + 3) * lda + k]) : _mm512_setzero_pd();
+
+                c0a = _mm512_fmadd_pd(a0, ba, c0a); c0b = _mm512_fmadd_pd(a0, bb, c0b);
+                c1a = _mm512_fmadd_pd(a1, ba, c1a); c1b = _mm512_fmadd_pd(a1, bb, c1b);
+                c2a = _mm512_fmadd_pd(a2, ba, c2a); c2b = _mm512_fmadd_pd(a2, bb, c2b);
+                c3a = _mm512_fmadd_pd(a3, ba, c3a); c3b = _mm512_fmadd_pd(a3, bb, c3b);
             }
-            _mm512_mask_storeu_pd(C + i * lda + j_rem, mask, c_v);
+
+            // --- 4. Store Results (Masked) ---
+            // Only write back to valid memory locations.
+            
+            _mm512_mask_storeu_pd(cp + 0*lda, mask_a, c0a);
+            if (mask_b) _mm512_mask_storeu_pd(cp + 0*lda + 8, mask_b, c0b);
+
+            if (rows_left > 1) {
+                _mm512_mask_storeu_pd(cp + 1*lda, mask_a, c1a);
+                if (mask_b) _mm512_mask_storeu_pd(cp + 1*lda + 8, mask_b, c1b);
+            }
+            if (rows_left > 2) {
+                _mm512_mask_storeu_pd(cp + 2*lda, mask_a, c2a);
+                if (mask_b) _mm512_mask_storeu_pd(cp + 2*lda + 8, mask_b, c2b);
+            }
+            if (rows_left > 3) {
+                _mm512_mask_storeu_pd(cp + 3*lda, mask_a, c3a);
+                if (mask_b) _mm512_mask_storeu_pd(cp + 3*lda + 8, mask_b, c3b);
+            }
         }
     }
 }
